@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V-32 Live Monitor</title>
+<style>
+:root{--series-1:#2a78d6;--series-2:#eb6834;--series-3:#1baf7a;--series-4:#eda100;--win:#2a78d6;--loss:#e34948;--grid:#e1e0d9;--base:#c3c2b7;--bg:#f4f6f9;--card:#fff;--fg:#1a1e24;--muted:#5d6977;--line:#e0e5eb;--accent:#2f6fde;--good:#1d8a4a;--bad:#c53030;--warn:#b7791f;--chip:#edf1f6;--shadow:0 1px 2px rgba(0,0,0,.05)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--series-1:#3987e5;--series-2:#d95926;--series-3:#199e70;--series-4:#c98500;--win:#3987e5;--loss:#e66767;--grid:#2c2c2a;--base:#383835;--bg:#0f1216;--card:#181d23;--fg:#e7ebf0;--muted:#96a2b0;--line:#2a313a;--accent:#6b9cff;--good:#4cc27e;--bad:#ff6b6b;--warn:#f6c453;--chip:#222932;--shadow:none}}
+:root[data-theme="dark"]{--series-1:#3987e5;--series-2:#d95926;--series-3:#199e70;--series-4:#c98500;--win:#3987e5;--loss:#e66767;--grid:#2c2c2a;--base:#383835;--bg:#0f1216;--card:#181d23;--fg:#e7ebf0;--muted:#96a2b0;--line:#2a313a;--accent:#6b9cff;--good:#4cc27e;--bad:#ff6b6b;--warn:#f6c453;--chip:#222932;--shadow:none}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{font-size:17px;margin:0;flex:1}
+.pill{font-size:12px;padding:3px 10px;border-radius:99px;background:var(--chip);color:var(--muted)}
+.pill.live{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.pill.error{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+main{max-width:1280px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-template-columns:minmax(0,380px) minmax(0,1fr)}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.col{display:grid;gap:14px;align-content:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;box-shadow:var(--shadow)}
+.card h2{font-size:14px;margin:0 0 10px}
+.muted{color:var(--muted);font-size:12.5px}
+input,select{font:inherit;width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px}
+button{font:inherit;border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:8px;padding:8px 12px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-variant-numeric:tabular-nums}
+.kv span:nth-child(odd){color:var(--muted)}
+.balchip{display:inline-flex;gap:6px;align-items:baseline;font-size:13px;padding:3px 10px;border-radius:99px;background:var(--chip);font-variant-numeric:tabular-nums;transition:background .3s}
+.balchip b{font-size:15px}
+.balchip.flash-up{background:color-mix(in srgb,var(--good) 30%,var(--chip))}
+.balchip.flash-down{background:color-mix(in srgb,var(--bad) 30%,var(--chip))}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+.vs-t td.ok{color:var(--good);font-weight:600}.vs-t td.no{color:var(--bad)}
+.vs-t td,.vs-t th{white-space:nowrap}
+.ball{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#fff;font-size:11px;font-weight:700}
+.tag-practice{font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:99px;background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn);vertical-align:2px;margin-left:6px}
+.prac-form{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.prac-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.prac-btns{display:flex;gap:8px;align-items:end}
+.prac-btns button{flex:1}
+.lab-verdict{padding:10px 12px;border-radius:8px;margin-bottom:10px;font-size:13px;background:var(--chip)}
+.lab-verdict.edge{background:color-mix(in srgb,var(--warn) 20%,var(--chip))}
+.lab-t td small{color:var(--muted)}
+.probbar{display:inline-flex;width:84px;height:8px;border-radius:4px;overflow:hidden;vertical-align:middle;margin-left:6px;gap:1px}
+.probbar i{display:block;height:100%}
+.big{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+.meter{margin-top:8px}
+.meter .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.meter .bar{height:8px;background:var(--chip);border-radius:4px;overflow:hidden;margin-top:3px}
+.meter .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.meter.loss .bar i{background:var(--bad)}.meter.target .bar i{background:var(--good)}
+.preview-wrap{position:relative;container-type:inline-size}
+.ov{position:absolute;top:8px;right:8px;background:rgba(10,14,20,.82);color:#eef2f6;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 8px;font-size:11px;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);pointer-events:none}
+.ov-btns{float:right;display:inline-flex;gap:4px;margin-left:10px;pointer-events:auto}
+.ov-btns button{all:unset;cursor:pointer;width:18px;height:18px;line-height:18px;text-align:center;border-radius:4px;background:rgba(255,255,255,.12);color:#e7ecf1;font-size:12px}
+.ov-btns button:hover{background:rgba(255,255,255,.25)}
+.ov.min{padding:5px 8px}
+.ov-mini{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.ov-mini .ov-btns{margin-left:8px}
+.ov.max{font-size:14px;padding:10px 12px;max-width:none;width:min(560px,70%)}
+.ov.max h4{font-size:13px}.ov.max th{font-size:12px}.ov.max .pick .k{font-size:11.5px;min-width:160px}
+.ov h4{margin:0 0 6px;font-size:11px;font-weight:600;color:#a9b6c3;letter-spacing:.02em}
+.ov table{width:100%;border-collapse:collapse}
+.ov th,.ov td{padding:1px 5px;border:0;text-align:right}
+.ov th{color:#8d9aa7;font-weight:500;font-size:10.5px}
+.ov td:first-child,.ov th:first-child{text-align:left}
+.ov .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.ov .up{color:#5fc28f}.ov .down{color:#ef7b7a}.ov .flat{color:#a9b6c3}
+.ov tr.likely td{background:rgba(237,161,0,.22)}
+.ov tr.likely td:first-child{box-shadow:inset 3px 0 0 #eda100}
+.ov .star{color:#f5c04a;font-weight:700;font-size:10px}
+.ov .lastw{color:#a9b6c3;font-size:9.5px;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:0 3px}
+.ov .pick{margin-top:6px;padding:5px 7px;border-radius:5px;background:rgba(237,161,0,.16);display:grid;gap:2px;color:#e7ecf1}
+.ov .pick .k{display:inline-block;min-width:168px;color:#c9a75a;font-size:10px;text-transform:uppercase;letter-spacing:.03em}
+.ov .pick b{color:#fff}
+.ov .auto{margin-top:3px;padding-top:4px;border-top:1px dashed rgba(255,255,255,.2)}
+.ov .next{margin-top:6px;padding:4px 6px;border-radius:5px;background:rgba(237,161,0,.18);color:#fbe3a6}
+.ov .next b{color:#fff}
+.ov .foot{margin-top:6px;color:#a9b6c3;font-size:10.5px}
+@container (max-width:640px){.ov{position:static;margin-top:8px;background:var(--chip);color:var(--fg);border-color:var(--line);backdrop-filter:none}.ov h4,.ov th,.ov .foot,.ov .flat{color:var(--muted)}.ov .next,.ov .next b,.ov .pick,.ov .pick b{color:var(--fg)}.ov .pick .k{color:var(--warn)}.ov .star{color:var(--warn)}}
+.pill.stale{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.preview{background:#000;border-radius:8px;aspect-ratio:16/9;display:grid;place-items:center;overflow:hidden}
+.preview img{width:100%;height:100%;object-fit:contain;display:block}
+.preview .empty{color:#8a96a3;font-size:13px;text-align:center;padding:20px}
+.strip{display:flex;flex-wrap:wrap;gap:5px}
+.ball{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;color:#14210a;background:#c9e264}
+.ball{color:#fff}.ball[data-n="8"]{background:var(--series-1)}.ball[data-n="9"]{background:var(--series-2)}.ball[data-n="10"]{background:var(--series-3)}.ball[data-n="11"]{background:var(--series-4);color:#1a1300}
+.ball.gap{outline:2px dashed var(--bad);outline-offset:1px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 4px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:500;font-size:12px}
+.grid2{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+#ways{margin-bottom:14px}
+.ways-wrap{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.ways-t td{position:relative}
+.ways-t td.cell{background:color-mix(in srgb,var(--series-1) calc(var(--a)*100%),transparent)}
+.ways-t td.cell.dark{color:#fff}
+.ways-t td small{opacity:.75;margin-left:4px}
+.ways-h{font-size:13px;margin:0 0 8px}
+.ways-pick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.ways-pick label{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.banner{display:none;grid-column:1/-1;border-radius:10px;padding:14px 16px;color:#fff;align-items:center;gap:14px}
+.banner.show{display:flex}
+.banner.loss,.banner.time{background:var(--bad);animation:flash 1s steps(2) infinite}
+.banner.target{background:var(--good)}
+.banner.ack{animation:none}
+.banner b{font-size:16px}
+.banner .txt{flex:1}
+.banner button{background:#fff;color:#111;border-color:#fff}
+@keyframes flash{50%{filter:brightness(.8)}}
+.note{border-left:3px solid var(--accent);padding:8px 10px;background:var(--chip);border-radius:6px;color:var(--muted);font-size:12.5px}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);padding:0;width:min(440px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog form{padding:18px;display:grid;gap:12px}
+dialog h2{margin:0;font-size:17px}
+label.f{display:grid;gap:4px;font-size:13px}
+label.f small{color:var(--muted)}
+.err{color:var(--bad);font-size:13px;min-height:1em}
+.hidden{display:none!important}
+.viz{display:block;max-width:100%;height:auto;overflow:visible}
+.viz-grid{stroke:var(--grid);stroke-width:1}.viz-base{stroke:var(--base);stroke-width:1}
+.viz-axis{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.viz-ref{stroke-width:1.5;stroke-dasharray:5 4;stroke:var(--muted)}.viz-ref.loss{stroke:var(--loss)}.viz-ref.win{stroke:var(--win)}
+.viz-reflbl{fill:var(--muted);font-size:11px}
+.viz-cross{stroke:var(--muted);stroke-width:1}
+.viz-ring{stroke:var(--card);stroke-width:2}
+.viz-bar.on{filter:brightness(1.15)}
+.viz-expect{stroke:var(--fg);stroke-width:2}
+.viz-empty{color:var(--muted);font-size:13px;padding:28px 0;text-align:center}
+.viz-tip{position:fixed;z-index:10;pointer-events:none;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.viz-tip span{color:var(--muted)}
+.multi{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.multi h3{font-size:13px;margin:0 0 2px;display:flex;align-items:center;gap:6px}
+.multi h3 i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.hit{color:var(--good)}.miss{color:var(--bad)}
+@keyframes pop{from{background:color-mix(in srgb,var(--accent) 25%,var(--card))}}
+.card.pop{animation:pop 1.2s ease-out}
+</style>
+</head>
+<body>
+<header>
+  <h1>V-32 Live Monitor</h1>
+  <span class="pill" id="statusPill">Stopped</span>
+  <span class="balchip" id="hdrBal" title="Your balance in the game, read live from the game window" hidden><span class="muted">Balance</span> <b id="hdrBalV">–</b> <span id="hdrBalD"></span></span>
+  <button id="openSettings" aria-label="Settings">⚙ Settings</button>
+</header>
+
+<main>
+  <div class="banner" id="banner" role="alert">
+    <div class="txt"><b id="bannerTitle"></b><div id="bannerText"></div></div>
+    <button id="bannerAck">I've stopped – end session</button>
+    <button id="bannerKeep">Dismiss</button>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <h2>Game window</h2>
+      <div class="row"><input id="url" type="url" placeholder="https://your-site.example/…" aria-label="Game address"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="start">Start capture</button>
+        <button id="stop">Stop capture</button>
+        <button id="show" title="Bring the monitor's own Chrome window to the front">Show game window</button>
+      </div>
+      <p class="muted" id="note" style="margin:8px 0 0"></p>
+      <div class="kv" style="margin-top:8px">
+        <span>Round ID</span><span id="roundId">–</span>
+        <span>Balance in game</span><span id="gameBal">–</span>
+        <span>Newest result side</span><span id="side">–</span>
+      </div>
+    </section>
+
+    <section class="card" id="sessionCard">
+      <h2>Playing session</h2>
+      <div id="noSession">
+        <p class="muted" style="margin-top:0">Start a session before you play: it asks for your limits and can start practice autoplay at the same time. The monitor tracks your balance against your limits and sounds an alarm when you reach one.</p>
+        <div class="kv" id="liveStart"><span>Starting balance</span><span><b id="liveStartV">–</b> <small class="muted">live from the game</small></span></div>
+        <label class="f hidden" id="startBalWrap">Starting balance <small>The game's balance can't be read right now, so type it in.</small>
+          <input id="startBal" type="number" min="0" step="0.01" placeholder="your game balance"></label>
+        <button class="primary" id="startSession" style="margin-top:10px;width:100%">Start session</button>
+        <p class="err" id="sessionErr"></p>
+      </div>
+      <div id="inSession" class="hidden">
+        <div class="muted">Net this session</div>
+        <div class="big" id="net">₹0.00</div>
+        <div class="meter loss"><div class="lbl"><span>Stop-loss used</span><span id="lossLbl"></span></div><div class="bar"><i id="lossBar"></i></div></div>
+        <div class="meter target"><div class="lbl"><span>Profit target</span><span id="targetLbl"></span></div><div class="bar"><i id="targetBar"></i></div></div>
+        <div class="meter"><div class="lbl"><span>Time</span><span id="timeLbl"></span></div><div class="bar"><i id="timeBar"></i></div></div>
+        <div class="kv" style="margin-top:10px">
+          <span>Started with</span><span id="sStart"></span>
+          <span>Balance now</span><span id="sBal"></span>
+          <span>Rounds since start</span><span id="sRounds"></span>
+        </div>
+        <div class="row hidden" id="manualBalRow" style="margin-top:10px">
+          <input id="manualBal" type="number" min="0" step="0.01" placeholder="Update balance by hand" aria-label="Update balance by hand">
+          <button id="setBal" style="flex:0 0 auto">Update</button>
+        </div>
+        <button class="danger" id="endSession" style="margin-top:10px;width:100%">End session</button>
+      </div>
+    </section>
+
+    <section class="card" id="autoClickCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <h2 style="margin:0">Auto-click in game</h2>
+        <span class="muted" id="acState">Off</span>
+      </div>
+      <p class="muted" style="margin-top:0;font-size:13px">Automatically clicks the number and amount in the game window when each round opens.</p>
+      <div class="grid2" style="gap:8px;margin-bottom:10px">
+        <label class="f">Number
+          <select id="acNumber">
+            <option value="auto">Auto (prediction pick)</option>
+            <option value="8">Player 8</option>
+            <option value="9">Player 9</option>
+            <option value="10">Player 10</option>
+            <option value="11">Player 11</option>
+          </select>
+        </label>
+        <label class="f">Amount (₹)
+          <input type="text" id="acAmount" placeholder="auto (or e.g. 100)">
+        </label>
+      </div>
+      <div class="row" style="gap:8px">
+        <button type="button" class="primary" id="acToggle">▶ Enable auto-click</button>
+        <button type="button" id="acClickNow" title="Immediately clicks the number and amount in the game window">⚡ Click now (Test)</button>
+      </div>
+      <p class="muted" id="acMsg" style="margin:8px 0 0;font-size:12.5px"></p>
+    </section>
+
+    <section class="card">
+      <h2>Your limits</h2>
+      <div class="kv" id="limits"></div>
+      <p class="muted" style="margin-bottom:0">This monitor never bets in the game. It reads results, odds and your balance; its only clicks are opening VR 32 Cards from the games list and the game's Reconnect button after an inactivity disconnect (both can be turned off in Settings).</p>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <div class="row" style="margin-bottom:10px;justify-content:space-between"><h2 style="margin:0">Live view</h2>
+        <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="ovToggle" checked> Win % overlay</label></div>
+      <div class="preview-wrap">
+        <div class="preview" id="preview"><div class="empty">Start capture to see the game here.</div></div>
+        <div class="ov" id="ov" hidden></div>
+      </div>
+    </section>
+
+    <section class="card" id="latestCard">
+      <h2>Latest rounds <span class="muted">(real result vs predictions made before each round)</span></h2>
+      <p class="muted" id="latestSum" style="margin-top:0"></p>
+      <div style="overflow-x:auto">
+        <table class="vs-t"><thead><tr><th>Time</th><th>Round ID</th><th>Real result</th><th>Auto prediction</th><th></th><th>Hottest last 20</th><th></th><th>Repeat last</th><th></th><th>Pattern (last 2)</th><th></th><th>Always 11</th></tr></thead><tbody id="vsRows"></tbody></table>
+      </div>
+    </section>
+
+
+    <section class="card" id="liveCheck">
+      <h2>Live pick check <span class="muted">(updates every round)</span></h2>
+      <div class="grid2" style="gap:10px">
+        <div><div class="muted">Next round – best chance</div><div class="big" id="lcNext">Player 11</div><div class="muted" id="lcNextP"></div></div>
+        <div><div class="muted">Last round</div><div class="big" id="lcLast">–</div><div class="muted" id="lcLastRes"></div></div>
+        <div><div class="muted">Pick hit rate since capture started</div><div class="big" id="lcRate">–</div><div class="muted" id="lcRateSub"></div></div>
+      </div>
+      <p class="muted" style="margin-bottom:0">The pick is always the player with the highest true chance; no pattern can do better. This panel scores it live against every finished round, so you can watch it land near its true chance.</p>
+    </section>
+
+    <section class="card" id="pracCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Practice autoplay <span class="tag-practice">PRETEND MONEY</span></h2><span class="muted" id="pracState">Off</span></div>
+      <form id="pracForm" class="prac-form">
+        <label>Prediction method<select name="method" id="pracMethod"></select></label>
+        <label>Stake per round (₹)<input name="stake" type="number" min="1" step="any" placeholder="e.g. your usual bet" required></label>
+        <label>Pretend starting balance (₹)<input name="startBalance" type="number" min="1" step="any" placeholder="your game balance" required></label>
+        <label>Stop-loss (₹, 0 = none)<input name="stopLoss" type="number" min="0" step="any" placeholder="0"></label>
+        <label>Profit target (₹, 0 = none)<input name="target" type="number" min="0" step="any" placeholder="0"></label>
+        <label>Stop after rounds (0 = none)<input name="maxRounds" type="number" min="0" step="1" placeholder="0"></label>
+        <label>Stake after a loss<select name="progression"><option value="flat">Same stake (flat)</option><option value="double">Double it (martingale)</option></select></label>
+        <div class="prac-btns"><button type="submit" class="primary" id="pracStart">▶ Start autoplay</button><button type="button" class="danger" id="pracStop">■ Stop</button></div>
+      </form>
+      <p class="muted" id="pracErr" style="margin:6px 0 0"></p>
+      <div class="grid2" style="gap:10px;margin-top:12px">
+        <div><div class="muted">Next round's pretend bet</div><div class="big" id="pracNext">–</div><div class="muted" id="pracNextSub"></div></div>
+        <div><div class="muted">Pretend balance</div><div class="big" id="pracBal">–</div><div class="muted" id="pracBalSub"></div></div>
+        <div><div class="muted">Win rate</div><div class="big" id="pracRate">–</div><div class="muted" id="pracRateSub"></div></div>
+      </div>
+      <div id="chPrac" style="margin-top:10px"></div>
+      <div style="overflow-x:auto"><table class="vs-t"><thead><tr><th>Time</th><th>Round ID</th><th>Bet on</th><th>Real result</th><th>Stake</th><th>Won / lost</th><th>Balance</th></tr></thead><tbody id="pracBets"></tbody></table></div>
+      <p class="muted" style="margin-bottom:0">Auto (the default) picks, before each round, the method with the best win rate over your last 200 captured rounds, so you don't have to choose; its own results are scored here like any other method. Nothing is ever sent to the game: no clicks, no real bets. Each round the method picks from earlier rounds, the pretend stake is settled at the table's Back odds against the real result, and it stops by itself at your stop-loss, target or round limit. A round after a capture gap, or when the table's odds haven't been read, is void. The starting balance and limits are filled in from your game balance and your session settings; change them as you like.</p>
+    </section>
+
+    <section class="card" id="vsCard">
+      <h2>Predicted vs real result <span class="muted" id="vsN"></span></h2>
+      <div style="overflow-x:auto">
+        <div class="grid2" style="gap:10px;margin-bottom:12px">
+          <div><div class="muted">Our prediction (best chance: Player 11)</div><div class="big" id="vsWin">–</div><div class="muted" id="vsWinSub"></div></div>
+          <div><div class="muted">If ₹100 was bet on it every round</div><div class="big" id="vsMoney">–</div><div class="muted" id="vsMoneySub"></div></div>
+        </div>
+        <table class="vs-t"><thead><tr><th>Prediction method</th><th>Same</th><th>Different</th><th>Win rate</th><th>By chance</th><th>Normal luck range</th><th>₹100 each round</th></tr></thead><tbody id="vsSum"></tbody></table>
+      </div>
+      <p class="muted" style="margin-bottom:0">Each prediction is made before the round, from earlier rounds only. A win rate inside the "Normal luck range" means the method did no better than chance. With few rounds that range is wide: one method will always look like a winner for a while, and it changes as rounds come in.</p>
+      <p class="muted" id="vsOddsNote" style="margin:6px 0 0"></p>
+    </section>
+
+    <section class="card" id="labCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Model lab: trained prediction models</h2>
+        <div class="row" style="gap:8px;flex-wrap:nowrap">
+          <button class="primary" id="labTrain">Retrain now</button>
+        </div>
+      </div>
+      <p class="muted" id="labInfo" style="margin-top:0"></p>
+      <div class="lab-verdict" id="labVerdict"></div>
+      <div style="overflow-x:auto">
+        <table class="vs-t lab-t"><thead><tr><th>Model</th><th>Next round</th><th>Win rate</th><th>vs 32-card math</th><th>Log score</th><th>₹100 on its pick</th><th>Value bets</th></tr></thead><tbody id="labT"></tbody></table>
+      </div>
+      <p class="muted" style="margin-bottom:0">Every model is trained walk-forward: it predicts each round from earlier rounds only, then learns the result. "vs 32-card math" is its win rate minus the exact model's on the same rounds; it only counts as a real edge if it stays clearly above zero (z above 2.5) over many rounds. Log score measures how good its percentages are (lower is better). Value bets: it bets only when it thinks the table's odds pay more than the risk.</p>
+    </section>
+
+    <section class="card">
+      <h2>Win / loss this session</h2>
+      <div class="muted" style="margin-bottom:4px">Net result over time, against your stop-loss and profit target</div>
+      <div id="chNet"></div>
+      <div class="muted" style="margin:12px 0 4px">Each balance change (latest 60)</div>
+      <div class="legend"><span><i style="background:var(--win)"></i>Win</span><span><i style="background:var(--loss)"></i>Loss</span></div>
+      <div id="chSteps"></div>
+    </section>
+
+    <section class="card">
+      <h2>Trend: each player's win share <span class="muted" id="chTrendWin"></span></h2>
+      <div class="muted" style="margin-bottom:8px">The solid line is the share of recent rounds the player won; the dashed line is their true chance. Swings around the dashed line are normal and don't predict the next round.</div>
+      <div class="multi" id="chTrend"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Wins by player</h2>
+        <div class="muted" style="margin-bottom:4px">Share of captured rounds won; the tick is the true chance</div>
+        <div id="chPlayers"></div>
+      </section>
+      <section class="card">
+        <h2>Session results</h2>
+        <div class="legend"><span><i style="background:var(--win)"></i>Up</span><span><i style="background:var(--loss)"></i>Down</span></div>
+        <div id="chSessions"></div>
+      </section>
+    </div>
+
+    <div class="note">Every round is a new shuffle, so past results can't tell you the next winner. The tables below show the real chance of each player, check your captured results against it, and the panel above scores every common "prediction" method against the real results.</div>
+
+    <section class="card" id="ways">
+      <h2>All the ways to win <span class="muted">(every possible deal of the 32 cards)</span></h2>
+      <p class="muted" id="waysSum" style="margin-top:0"></p>
+      <div class="ways-wrap">
+        <div style="overflow-x:auto">
+          <table class="ways-t">
+            <thead><tr><th>Card dealt</th><th>Player 8</th><th>Player 9</th><th>Player 10</th><th>Player 11</th></tr></thead>
+            <tbody id="waysT"></tbody>
+          </table>
+          <p class="muted" style="margin-bottom:0">Each cell: that player's chance of winning when they get that card, and their total in brackets. Stronger blue = more likely.</p>
+        </div>
+        <div>
+          <h3 class="ways-h">What if… pick the cards you can see</h3>
+          <div class="ways-pick" id="waysPick"></div>
+          <table><thead><tr><th>Player</th><th>Chance to win</th></tr></thead><tbody id="waysIf"></tbody></table>
+          <p class="muted" style="margin-bottom:0">All four cards are dealt only after betting closes, so this can't be used to pick a bet: it shows how each card changes the chances.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Next round: true chances</h2>
+        <table><thead><tr><th>Player</th><th>Win chance</th><th>Fair odds</th><th>Odd</th></tr></thead><tbody id="oddsT"></tbody></table>
+        <p class="muted" style="margin-bottom:0">Exact: counted over all <span id="sims"></span> possible deals of the 32 cards. If the site pays less than the fair odds, the bet loses money on average.</p>
+      </section>
+      <section class="card">
+        <h2>Captured vs. true chances</h2>
+        <table><thead><tr><th>Player</th><th>Wins</th><th>Captured</th><th>Expected</th><th>Longest run</th></tr></thead><tbody id="obsT"></tbody></table>
+        <p class="muted" id="fair" style="margin-bottom:0"></p>
+      </section>
+      <section class="card">
+        <h2>Past sessions</h2>
+        <table><thead><tr><th>Date</th><th>Rounds</th><th>Net</th><th>Ended</th></tr></thead><tbody id="pastT"></tbody></table>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:14px">
+      <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Captured results <span class="muted" id="total"></span></h2>
+        <a href="/api/rounds.csv" style="flex:0 0 auto"><button>Download CSV</button></a></div>
+      <div class="strip" id="strip"></div>
+      <p class="muted" style="margin-bottom:0">Newest first. A dashed ring marks a result captured after a gap (rounds may be missing before it).</p>
+    </section>
+  </div>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>Session settings</h2>
+    <p class="muted" style="margin:0">Set these before you play. The monitor warns you the moment you reach any of them.</p>
+    <label class="f">Budget (₹) <small>The most money you are ready to spend this session.</small>
+      <input name="budget" type="number" min="0" step="1" required></label>
+    <label class="f">Stop-loss (₹) <small>Stop when you are down this much. No more than the budget.</small>
+      <input name="lossLimit" type="number" min="0" step="1" required></label>
+    <label class="f">Profit target (₹) <small>Stop when you are up this much. 0 = no target.</small>
+      <input name="profitTarget" type="number" min="0" step="1"></label>
+    <label class="f">Time limit (minutes) <small>0 = no limit.</small>
+      <input name="timeLimitMin" type="number" min="0" step="1"></label>
+    <label class="f">Newest result in the "Last Result" row is on the
+      <select name="newestSide"><option value="auto">Find out automatically</option><option value="right">Right</option><option value="left">Left</option></select></label>
+    <label class="row" style="font-size:13px"><input name="alarmSound" type="checkbox" style="width:auto;flex:0 0 auto"> <span>Sound an alarm when a limit is reached</span></label>
+    <label class="row" style="font-size:13px"><input name="autoReconnect" type="checkbox" style="width:auto;flex:0 0 auto"> <span>Reconnect automatically when the game disconnects for inactivity (clicks only the game's Reconnect button)</span></label>
+    <label class="row" style="font-size:13px"><input name="autoOpenGame" type="checkbox" style="width:auto;flex:0 0 auto"> <span>Open VR 32 Cards (MAC88) automatically from the Virtual Games list</span></label>
+    <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
+    <label class="row" style="font-size:13px"><input name="autoClick" type="checkbox" style="width:auto;flex:0 0 auto"> <span><b>Auto-click number and amount in game</b></span></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 8px">
+      <label class="f">Target number <small>Player</small>
+        <select name="autoClickNumber">
+          <option value="auto">Auto (use prediction)</option>
+          <option value="8">Player 8</option>
+          <option value="9">Player 9</option>
+          <option value="10">Player 10</option>
+          <option value="11">Player 11</option>
+        </select>
+      </label>
+      <label class="f">Amount (₹) <small>Stake</small>
+        <input name="autoClickAmount" type="text" placeholder="auto (or 50, 100)">
+      </label>
+    </div>
+    <p class="err" id="settingsErr"></p>
+    <div class="row"><button type="button" id="cancelSettings">Cancel</button><button class="primary" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="startDlg" style="width:min(560px,94vw)">
+  <form method="dialog" id="startForm">
+    <h2>Start session</h2>
+    <div class="kv" style="margin:0 0 6px"><span>Starting balance</span><span><b id="sdBal">–</b> <small class="muted">live from the game</small></span></div>
+    <div class="grid2" style="gap:8px">
+      <label class="f">Budget (₹) <small>Most you'll spend</small><input name="budget" type="number" min="1" step="any" required></label>
+      <label class="f">Stop-loss (₹) <small>Stop when down this much</small><input name="lossLimit" type="number" min="1" step="any" required></label>
+      <label class="f">Profit target (₹) <small>0 = none</small><input name="profitTarget" type="number" min="0" step="any"></label>
+      <label class="f">Time limit (min) <small>0 = none</small><input name="timeLimitMin" type="number" min="0" step="1"></label>
+    </div>
+    <label class="row" style="font-size:13px;margin-top:10px"><input name="autoplay" type="checkbox" checked style="width:auto;flex:0 0 auto"> <span><b>Start practice autoplay</b> with this session <span class="tag-practice">PRETEND MONEY</span></span></label>
+    <div id="sdAuto" class="grid2" style="gap:8px">
+      <label class="f">Prediction method<select name="method" id="sdMethod"></select></label>
+      <label class="f">Stake per round (₹)<input name="stake" type="number" min="1" step="any"></label>
+      <label class="f">Stake after a loss<select name="progression"><option value="flat">Same stake (flat)</option><option value="double">Double it (martingale)</option></select></label>
+      <label class="f">Stop after rounds <small>0 = none</small><input name="maxRounds" type="number" min="0" step="1"></label>
+    </div>
+    <p class="muted" style="margin:6px 0 0;font-size:12px">Autoplay starts from your game balance and stops at the same stop-loss and profit target. It places pretend bets only, scored against the real results; nothing is sent to the game. Ending the session stops it.</p>
+    <p class="err" id="startErr"></p>
+    <div class="row"><button type="button" id="cancelStart">Cancel</button><button class="primary" type="submit">▶ Start session</button></div>
+  </form>
+</dialog>
+
+<script src="/game.js"></script>
+<script src="/models.js"></script>
+<script src="/charts.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

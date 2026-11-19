@@ -1,0 +1,15 @@
+{
+  "name": "v32-live-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live V-32 Cards monitor: captures results, shows the game, and tracks your session against your budget and stop-loss. Never bets.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  },
+  "engines": {"node": ">=18"}
+}
