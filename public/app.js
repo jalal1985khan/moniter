@@ -312,7 +312,18 @@
   // ---------------------------------------------------------------- model lab (trained models)
   // Trained only on rounds captured from your game; retrains on every new round.
   let labKey = null;
-  $('labTrain').onclick = () => runLab();
+  let labTrainedAt = 0, labBtnTimer;
+  $('labTrain').onclick = () => {
+    const btn = $('labTrain');
+    btn.disabled = true; btn.textContent = 'Retraining…';
+    // Let the button repaint before the (synchronous) training runs.
+    setTimeout(() => {
+      runLab();
+      btn.textContent = 'Retrained ✓';
+      clearTimeout(labBtnTimer);
+      labBtnTimer = setTimeout(() => { btn.disabled = false; btn.textContent = 'Retrain now'; }, 1500);
+    }, 30);
+  };
   function renderLab() {
     const values = S.values || [];
     if (values.length + ':' + values.at(-1) + ':' + (S.tableOdds && S.tableOdds.at) !== labKey) runLab();
@@ -321,12 +332,13 @@
     const values = S.values || [];
     labKey = values.length + ':' + values.at(-1) + ':' + (S.tableOdds && S.tableOdds.at);
     const t0 = performance.now();
+    labTrainedAt = Date.now();
     const res = V32Models.train(values, {prior: S.odds.win, odds: liveOdds()});
     drawLab(res, {real: values.length, ms: performance.now() - t0});
   }
   function drawLab(res, {real, ms}) {
     const scored = res[0].rounds;
-    $('labInfo').textContent = `Trained on the ${real.toLocaleString()} rounds captured from your game · ${Math.round(ms)} ms.${liveOdds() ? '' : " Money columns appear once the table's odds have been read."}`;
+    $('labInfo').textContent = `Trained on the ${real.toLocaleString()} rounds captured from your game · ${Math.round(ms)} ms · last trained ${new Date(labTrainedAt).toLocaleTimeString()} (it also retrains by itself on every new round, so with no new rounds the numbers stay the same).${liveOdds() ? '' : " Money columns appear once the table's odds have been read."}`;
     if (!scored) { $('labT').innerHTML = '<tr><td colspan="7" class="muted">Waiting for rounds.</td></tr>'; $('labVerdict').textContent = ''; return; }
     const learned = res.slice(1);
     const best = learned.reduce((a, b) => (b.vsExact > a.vsExact ? b : a));
