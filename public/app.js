@@ -124,8 +124,13 @@
   };
   $('stop').onclick = () => post('/api/stop');
   $('show').onclick = async () => {
+    // On a server the Chrome window sits on the server's own screen, so open the remote view of it
+    // (noVNC behind /vnc/). Opened before any await so the browser does not block the new tab.
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    const remote = local ? null : window.open('/vnc/vnc.html?autoconnect=1&resize=scale&path=vnc/websockify', 'v32-game');
     const r = await post('/api/show');
     if (!r.ok) $('note').textContent = r.error;
+    else if (!local && !remote) $('note').textContent = 'Your browser blocked the new tab. Allow pop-ups for this site, or open /vnc/vnc.html yourself.';
   };
   $('startSession').onclick = () => {
     try { if (Notification.permission === 'default') Notification.requestPermission(); } catch {}
