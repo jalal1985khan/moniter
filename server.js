@@ -55,7 +55,7 @@ function createMonitor({
   let lastStrip = null; // The "Last Result" row as last read, in page order.
   let resumeGap = false; // The next new result follows a break in capture.
   let context = null, stopping = false, gamePage = null, gameFrame = null;
-  let lastAutoClickRound = null, lastAutoClickAt = 0, lastAutoClickAction = null, autoClicking = false;
+  let lastAutoClickRound = null, lastAutoClickAt = 0, lastAutoClickAction = null, autoClicking = false, autoClickTries = {};
   const clients = new Set(), viewers = new Set();
   let frame = null, castPage = null, castSession = null, lastFrameAt = 0, grabbing = false;
 
@@ -384,6 +384,7 @@ function createMonitor({
       return;
     }
 
+    if (!(roundKey in autoClickTries)) autoClickTries = {[roundKey]: 0};
     lastAutoClickRound = roundKey;
     lastAutoClickAt = now;
     autoClicking = true;
@@ -401,6 +402,11 @@ function createMonitor({
       };
       if (res.ok) {
         setCapture({ note: `Auto-clicked Player ${num} with amount ₹${amt} for round ${roundKey}.` });
+      } else if (/closed|locked|No "Player/i.test(res.error || '') && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 12) {
+        // The round changed before betting opened (odds still locked): try this round again shortly.
+        lastAutoClickAction.error = `Waiting for betting to open (try ${autoClickTries[roundKey]} of 12): ${res.error}`;
+        lastAutoClickRound = null; lastAutoClickAt = 0;
+        setTimeout(() => { if (lastAutoClickRound === null) checkAndTriggerAutoClick(roundKey); }, 2000);
       }
     } catch (e) {
       lastAutoClickAction = {

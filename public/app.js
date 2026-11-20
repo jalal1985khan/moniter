@@ -436,12 +436,14 @@
   $('acToggle').onclick = async () => {
     const cur = S && S.autoClick && S.autoClick.enabled;
     const num = $('acNumber').value;
-    const amt = $('acAmount').value;
+    const amt = $('acAmount').value.trim() || 'auto';
+    if (amt !== 'auto' && !(Number(amt) > 0)) { $('acMsg').textContent = 'Amount must be a number like 100, or "auto".'; $('acMsg').className = 'err'; return; }
+    if (!cur && !confirm(`Auto-click places REAL bets in the game: Player ${num === 'auto' ? '(prediction pick)' : num}, ${amt === 'auto' ? '₹100' : '₹' + amt} every round until you disable it or a session limit is reached. Turn it on?`)) return;
     await post('/api/autoclick/toggle', { enabled: !cur, number: num, amount: amt });
   };
   $('acClickNow').onclick = async () => {
     const num = $('acNumber').value;
-    const amt = $('acAmount').value;
+    const amt = $('acAmount').value.trim() || 'auto';
     $('acMsg').textContent = 'Clicking in game…';
     $('acMsg').className = 'muted';
     const r = await post('/api/click', { number: num, amount: amt });
