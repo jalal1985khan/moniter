@@ -57,14 +57,14 @@
   // ---------------------------------------------------------------- settings
   const form = $('settingsForm');
   function openSettings() {
-    const s = (S && S.settings) || {budget: '', lossLimit: '', profitTarget: 0, timeLimitMin: 60, newestSide: 'auto', alarmSound: true, autoReconnect: true, autoOpenGame: true, autoClick: false, autoClickNumber: 'auto', autoClickAmount: 'auto'};
+    const s = (S && S.settings) || {budget: '', lossLimit: '', profitTarget: 0, timeLimitMin: 60, newestSide: 'auto', alarmSound: true, autoReconnect: true, autoOpenGame: true, autoClick: false, autoClickNumber: 'auto', autoClickAmount: ''};
     for (const k of ['budget', 'lossLimit', 'profitTarget', 'timeLimitMin', 'newestSide']) form.elements[k].value = s[k];
     form.elements.alarmSound.checked = s.alarmSound !== false;
     form.elements.autoReconnect.checked = s.autoReconnect !== false;
     form.elements.autoOpenGame.checked = s.autoOpenGame !== false;
     form.elements.autoClick.checked = s.autoClick === true;
     form.elements.autoClickNumber.value = s.autoClickNumber || 'auto';
-    form.elements.autoClickAmount.value = s.autoClickAmount || 'auto';
+    form.elements.autoClickAmount.value = s.autoClickAmount > 0 ? s.autoClickAmount : '';
     $('settingsErr').textContent = '';
     $('settings').showModal();
   }
@@ -433,45 +433,46 @@
   }
 
   // ---------------------------------------------------------------- auto-click number and amount in game
+  const acShow = (text, cls) => { $('acMsg').textContent = text; $('acMsg').className = cls; };
+  const acSeen = r => (r.seen ? `\nWhat the game page showed: ${r.seen}` : '');
   $('acToggle').onclick = async () => {
     const cur = S && S.autoClick && S.autoClick.enabled;
-    const num = $('acNumber').value;
-    const amt = $('acAmount').value.trim() || 'auto';
-    if (amt !== 'auto' && !(Number(amt) > 0)) { $('acMsg').textContent = 'Amount must be a number like 100, or "auto".'; $('acMsg').className = 'err'; return; }
-    if (!cur && !confirm(`Auto-click places REAL bets in the game: Player ${num === 'auto' ? '(prediction pick)' : num}, ${amt === 'auto' ? '₹100' : '₹' + amt} every round until you disable it or a session limit is reached. Turn it on?`)) return;
-    await post('/api/autoclick/toggle', { enabled: !cur, number: num, amount: amt });
+    const num = $('acNumber').value, amt = Number($('acAmount').value.trim());
+    if (!cur) {
+      if (!(amt > 0)) return acShow('Enter the amount to bet (₹) first.', 'err');
+      if (!confirm(`Auto-click places REAL bets in the game: ${num === 'auto' ? 'the prediction pick from your captured rounds' : 'Player ' + num}, ₹${amt} every round until you disable it or a session limit is reached. Turn it on?`)) return;
+    }
+    const r = await post('/api/autoclick/toggle', { enabled: !cur, number: num, amount: amt || null });
+    if (!r.ok) acShow(r.error, 'err');
   };
   $('acClickNow').onclick = async () => {
-    const num = $('acNumber').value;
-    const amt = $('acAmount').value.trim() || 'auto';
-    $('acMsg').textContent = 'Clicking in game…';
-    $('acMsg').className = 'muted';
+    const num = $('acNumber').value, amt = Number($('acAmount').value.trim());
+    if (!(amt > 0)) return acShow('Enter the amount to bet (₹) first.', 'err');
+    if (!confirm(`This places a REAL bet now: ${num === 'auto' ? 'the prediction pick' : 'Player ' + num}, ₹${amt}. Continue?`)) return;
+    acShow('Placing the bet in the game…', 'muted');
     const r = await post('/api/click', { number: num, amount: amt });
-    $('acMsg').textContent = r.ok
-      ? `✓ Clicked Player ${r.player} with amount ₹${r.amount} successfully!`
-      : `✗ Click failed: ${r.error}`;
-    $('acMsg').className = r.ok ? 'pos' : 'err';
+    acShow(r.ok ? `✓ Bet placed: Player ${r.player} at ${r.detail && r.detail.odds}, ₹${r.amount}.` : `✗ ${r.error}${acSeen(r)}`, r.ok ? 'pos' : 'err');
   };
   function renderAutoClick() {
     const ac = S && S.autoClick;
     const enabled = !!(ac && ac.enabled);
-    $('acState').textContent = enabled ? `Active · P${ac.number} @ ${ac.amount === 'auto' ? 'Auto' : '₹' + ac.amount}` : 'Off';
+    $('acState').textContent = enabled ? `Active · ${ac.number === 'auto' ? 'prediction pick' : 'P' + ac.number} @ ₹${ac.amount}` : 'Off';
     $('acState').className = enabled ? 'pos' : 'muted';
     $('acToggle').textContent = enabled ? '■ Disable auto-click' : '▶ Enable auto-click';
     $('acToggle').className = enabled ? 'danger' : 'primary';
     if (ac) {
       if (document.activeElement !== $('acNumber')) $('acNumber').value = ac.number || 'auto';
-      if (document.activeElement !== $('acAmount') && ac.amount !== undefined) $('acAmount').value = ac.amount;
+      if (document.activeElement !== $('acAmount') && ac.amount > 0 && !$('acAmount').value) $('acAmount').value = ac.amount;
     }
     const act = ac && ac.lastAction;
     if (act && document.activeElement !== $('acClickNow')) {
       const ago = Math.round((Date.now() - act.at) / 1000);
       const timeStr = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
       if (act.ok) {
-        $('acMsg').textContent = `✓ Clicked Player ${act.number} with amount ₹${act.amount} (${timeStr})`;
+        $('acMsg').textContent = `✓ Bet placed: Player ${act.number}${act.detail && act.detail.detail ? ' at ' + act.detail.detail.odds : ''}, ₹${act.amount} (${timeStr})`;
         $('acMsg').className = 'pos';
       } else if (act.error) {
-        $('acMsg').textContent = `⚠ ${act.error} (${timeStr})`;
+        $('acMsg').textContent = `⚠ ${act.error} (${timeStr})${act.detail && act.detail.seen ? `\nWhat the game page showed: ${act.detail.seen}` : ''}`;
         $('acMsg').className = 'err';
       }
     }
@@ -575,7 +576,7 @@
       ['Time limit', st.timeLimitMin ? st.timeLimitMin + ' min' : 'none'],
       ['Alarm sound', st.alarmSound ? 'on' : 'off'],
       ['Auto-reconnect', st.autoReconnect !== false ? `on${S.capture.reconnects ? ` · ${S.capture.reconnects} since capture started` : ''}` : 'off'],
-      ['Auto-click in game', st.autoClick ? `on (${st.autoClickNumber === 'auto' ? 'Auto' : 'P' + st.autoClickNumber} @ ${st.autoClickAmount === 'auto' ? 'Auto' : '₹' + st.autoClickAmount})` : 'off'],
+      ['Auto-click in game', st.autoClick ? `on (${st.autoClickNumber === 'auto' ? 'Auto' : 'P' + st.autoClickNumber} @ ₹${st.autoClickAmount})` : 'off'],
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('') : '<span>Not set yet</span><span><button onclick="document.getElementById(\'openSettings\').click()">Set limits</button></span>';
 
     // Session

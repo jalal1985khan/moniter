@@ -76,7 +76,7 @@ function createMonitor({
       autoClick: {
         enabled: !!(settings && settings.autoClick),
         number: (settings && settings.autoClickNumber) || 'auto',
-        amount: (settings && settings.autoClickAmount) || 'auto',
+        amount: (settings && settings.autoClickAmount > 0) ? settings.autoClickAmount : null,
         lastAction: lastAutoClickAction,
       },
     };
@@ -329,6 +329,20 @@ function createMonitor({
     return await Clicker.executeClick(targetFrame, number, amount, { odds: tableOdds && tableOdds.back });
   }
 
+  // The player and amount to bet: the amount always comes from you; "auto" player = the pick made from
+  // the rounds captured from your game. Nothing is filled in with a default.
+  function chooseClick(number, amount) {
+    const amt = Number(amount);
+    if (!(amt > 0)) return {error: 'enter the amount to bet (₹).'};
+    let num = Number(number);
+    if (!number || number === 'auto') {
+      if (!rounds.length) return {error: 'no rounds captured yet, so there is no prediction pick. Choose a player.'};
+      num = V32.autoChoose(rounds.map(x => x.n)).pick;
+    }
+    if (![8, 9, 10, 11].includes(num)) return {error: 'choose Player 8, 9, 10 or 11.'};
+    return {number: num, amount: amt};
+  }
+
   async function checkAndTriggerAutoClick(triggerRound) {
     if (!settings || !settings.autoClick) return;
     if (!context || stopping || autoClicking) return;
@@ -352,24 +366,13 @@ function createMonitor({
     const roundKey = String(triggerRound || (rounds.length + 1));
     if (lastAutoClickRound === roundKey) return;
 
-    let num = 11;
-    if (settings.autoClickNumber && settings.autoClickNumber !== 'auto') {
-      num = Number(settings.autoClickNumber);
-    } else if (practice && practice.active && practice.nextPick) {
-      num = practice.nextPick;
-    } else {
-      const hist = rounds.map(x => x.n);
-      num = V32.autoChoose(hist).pick || 11;
+    const pick = chooseClick(settings.autoClickNumber, settings.autoClickAmount);
+    if (pick.error) {
+      lastAutoClickAction = { at: now, round: roundKey, ok: false, error: `Auto-click paused: ${pick.error}` };
+      broadcast();
+      return;
     }
-
-    let amt = 100;
-    if (settings.autoClickAmount && settings.autoClickAmount !== 'auto' && Number(settings.autoClickAmount) > 0) {
-      amt = Number(settings.autoClickAmount);
-    } else if (practice && practice.active && practice.nextStake) {
-      amt = Math.min(practice.nextStake, practice.balance || practice.nextStake);
-    } else {
-      amt = 100;
-    }
+    const num = pick.number, amt = pick.amount;
 
     if (capture.balance != null && capture.balance > 0 && capture.balance < amt) {
       lastAutoClickAction = {
@@ -402,7 +405,7 @@ function createMonitor({
       };
       if (res.ok) {
         setCapture({ note: `Auto-clicked Player ${num} with amount ₹${amt} for round ${roundKey}.` });
-      } else if (/closed|locked|No "Player/i.test(res.error || '') && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 12) {
+      } else if (res.closed && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 12) {
         // The round changed before betting opened (odds still locked): try this round again shortly.
         lastAutoClickAction.error = `Waiting for betting to open (try ${autoClickTries[roundKey]} of 12): ${res.error}`;
         lastAutoClickRound = null; lastAutoClickAt = 0;
@@ -645,8 +648,9 @@ function createMonitor({
         return json(200, {ok: true});
       }
       if (pathname === '/api/click') {
-        const num = body.number && body.number !== 'auto' ? Number(body.number) : (practice && practice.nextPick ? practice.nextPick : 11);
-        const amt = body.amount && body.amount !== 'auto' ? Number(body.amount) : (practice && practice.nextStake ? practice.nextStake : 100);
+        const pick = chooseClick(body.number, body.amount);
+        if (pick.error) return json(400, {ok: false, error: pick.error[0].toUpperCase() + pick.error.slice(1)});
+        const num = pick.number, amt = pick.amount;
         const res = await clickGameNumberAndAmount(num, amt);
         lastAutoClickAction = {
           at: Date.now(),
@@ -664,7 +668,8 @@ function createMonitor({
         if (!settings) settings = store.loadSettings() || {};
         if (body.enabled !== undefined) settings.autoClick = !!body.enabled;
         if (body.number !== undefined) settings.autoClickNumber = String(body.number);
-        if (body.amount !== undefined) settings.autoClickAmount = body.amount === 'auto' ? 'auto' : Number(body.amount);
+        if (body.amount !== undefined) settings.autoClickAmount = Number(body.amount) > 0 ? Number(body.amount) : null;
+        if (settings.autoClick && !(settings.autoClickAmount > 0)) { settings.autoClick = false; return json(400, {ok: false, error: 'Enter the amount to bet (₹) before turning auto-click on.'}); }
         store.saveSettings(settings);
         broadcast();
         return json(200, {ok: true, settings});

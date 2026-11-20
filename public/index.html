@@ -216,7 +216,7 @@ label.f small{color:var(--muted)}
       <div class="grid2" style="gap:8px;margin-bottom:10px">
         <label class="f">Number
           <select id="acNumber">
-            <option value="auto">Auto (prediction pick)</option>
+            <option value="auto">Prediction pick (from your captured rounds)</option>
             <option value="8">Player 8</option>
             <option value="9">Player 9</option>
             <option value="10">Player 10</option>
@@ -224,14 +224,14 @@ label.f small{color:var(--muted)}
           </select>
         </label>
         <label class="f">Amount (₹)
-          <input type="text" id="acAmount" placeholder="auto (or e.g. 100)">
+          <input type="number" min="1" step="any" id="acAmount" placeholder="e.g. 100" required>
         </label>
       </div>
       <div class="row" style="gap:8px">
         <button type="button" class="primary" id="acToggle">▶ Enable auto-click</button>
-        <button type="button" id="acClickNow" title="Immediately clicks the number and amount in the game window">⚡ Click now (Test)</button>
+        <button type="button" id="acClickNow" title="Places one real bet now with this player and amount">⚡ Bet once now</button>
       </div>
-      <p class="muted" id="acMsg" style="margin:8px 0 0;font-size:12.5px"></p>
+      <p class="muted" id="acMsg" style="margin:8px 0 0;font-size:12.5px;white-space:pre-line;word-break:break-word"></p>
     </section>
 
     <section class="card">
@@ -426,7 +426,7 @@ label.f small{color:var(--muted)}
         </select>
       </label>
       <label class="f">Amount (₹) <small>Stake</small>
-        <input name="autoClickAmount" type="text" placeholder="auto (or 50, 100)">
+        <input name="autoClickAmount" type="number" min="1" step="any" placeholder="e.g. 100">
       </label>
     </div>
     <p class="err" id="settingsErr"></p>
