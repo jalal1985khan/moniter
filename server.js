@@ -347,7 +347,12 @@ function createMonitor({
     let num = Number(number);
     if (!number || number === 'auto') {
       if (!rounds.length) return { error: 'no rounds captured yet, so there is no prediction pick. Choose a player.' };
-      num = V32.autoChoose(rounds.map(x => x.n)).pick;
+      const history = rounds.map(x => x.n);
+      const choice = V32.autoChoose(history);
+      // autoChoose selects a strategy; it does not return the player's number.
+      // Apply that strategy to the captured history before validating the bet.
+      const pickMethod = V32.SYSTEMS[choice.method];
+      num = typeof pickMethod === 'function' ? pickMethod(history) : null;
     }
     if (![8, 9, 10, 11].includes(num)) return { error: 'choose Player 8, 9, 10 or 11.' };
     return { number: num, amount: amt };

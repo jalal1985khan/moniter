@@ -180,15 +180,22 @@ test('end to end with a real browser', async t => {
           b.dataset.testOriginal = b.textContent; b.textContent = 'LOCKED';
         });
       });
-      await post('/api/autoclick/toggle', {enabled: true, number: '11', amount: 20});
+      // Auto-pick must resolve its selected strategy to a real player before betting.
+      // This exercises real click handling only on the local demo table.
+      const history = m.state().values;
+      const chosen = V32.autoChoose(history);
+      const expectedPlayer = V32.SYSTEMS[chosen.method](history);
+      await post('/api/autoclick/toggle', {enabled: true, number: 'auto', amount: 20});
       await until(() => /Waiting for betting to open/.test(m.state().autoClick.lastAction?.error || ''), 'auto-click to wait while the market is locked', 5000);
       await demo(() => document.querySelectorAll('.odds-row[data-player="11"] button').forEach(b => {
         b.textContent = b.dataset.testOriginal; delete b.dataset.testOriginal;
       }));
       await until(async () => {
         const b = await demo(() => window.__demo.lastBet);
-        return b && b.player === 11 && b.amount === 20;
+        return b && b.player === expectedPlayer && b.amount === 20;
       }, 'immediate auto-click on enable', 10000);
+      assert.strictEqual(m.state().autoClick.lastAction.number, expectedPlayer);
+      assert.strictEqual(m.state().autoClick.lastAction.ok, true);
 
       // 4. Auto-click for the next round after results update
       await demo(() => { window.__demo.lastBet = null; });
