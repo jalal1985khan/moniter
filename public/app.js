@@ -469,7 +469,7 @@
     if (!confirm(`This places a REAL bet now: ${num === 'auto' ? 'the prediction pick' : 'Player ' + num}, ₹${amt}. Continue?`)) return;
     acShow('Placing the bet in the game…', 'muted');
     const r = await post('/api/click', { number: num, amount: amt });
-    acShow(r.ok ? `✓ Bet placed: Player ${r.player} at ${r.detail && r.detail.odds}, ₹${r.amount}.` : `✗ ${r.error}${acSeen(r)}`, r.ok ? 'pos' : 'err');
+    acShow(r.ok ? `✓ Bet submitted: Player ${r.player} at ${r.detail && r.detail.odds}, ₹${r.amount}. Confirm it appears in My Bet.` : `✗ ${r.error}${acSeen(r)}`, r.ok ? 'pos' : 'err');
   };
   function renderAutoClick() {
     const ac = S && S.autoClick;
@@ -487,7 +487,7 @@
       const ago = Math.round((Date.now() - act.at) / 1000);
       const timeStr = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
       if (act.ok) {
-        $('acMsg').textContent = `✓ Bet placed: Player ${act.number}${act.detail && act.detail.detail ? ' at ' + act.detail.detail.odds : ''}, ₹${act.amount} (${timeStr})`;
+        $('acMsg').textContent = `✓ Bet submitted: Player ${act.number}${act.detail && act.detail.detail ? ' at ' + act.detail.detail.odds : ''}, ₹${act.amount}. Confirm it appears in My Bet. (${timeStr})`;
         $('acMsg').className = 'pos';
       } else if (act.error) {
         $('acMsg').textContent = `⚠ ${act.error} (${timeStr})${act.detail && act.detail.seen ? `\nWhat the game page showed: ${act.detail.seen}` : ''}`;

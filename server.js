@@ -55,7 +55,7 @@ function createMonitor({
   let lastStrip = null; // The "Last Result" row as last read, in page order.
   let resumeGap = false; // The next new result follows a break in capture.
   let context = null, stopping = false, gamePage = null, gameFrame = null;
-  let lastAutoClickRound = null, lastAutoClickAt = 0, lastAutoClickAction = null, autoClicking = false, autoClickTries = {};
+  let lastAutoClickRound = null, lastAutoClickAction = null, autoClicking = false, autoClickTries = {}, pendingAutoClickRound = null;
   const clients = new Set(), viewers = new Set();
   let frame = null, castPage = null, castSession = null, lastFrameAt = 0, grabbing = false;
 
@@ -146,6 +146,8 @@ function createMonitor({
   function onSnapshot(snap) {
     if (!snap || typeof snap !== 'object') return;
     const now = Date.now();
+    const observedRound = snap.round ? String(snap.round).slice(0, 40) : null;
+    const roundChanged = !!(observedRound && observedRound !== capture.round);
     const patch = { lastSnapshotAt: now };
     if (snap.round) patch.round = String(snap.round).slice(0, 40);
     if (snap.timer !== undefined) patch.timer = snap.timer;
@@ -223,17 +225,15 @@ function createMonitor({
         }
       }
     }
+    // Publish the newly observed round before a trigger/retry uses it as its guard key.
+    setCapture(patch);
     if (settings && settings.autoClick) {
-      if (snap.round && snap.round !== capture.round) {
-        checkAndTriggerAutoClick(snap.round);
-      } else if (tableOdds && (tableOdds.back || (snap.odds && snap.odds.back))) {
-        const roundKey = String(capture.round || (rounds.length + 1));
-        if (lastAutoClickRound !== roundKey && Date.now() - lastAutoClickAt >= 2500 && !autoClicking) {
-          checkAndTriggerAutoClick(roundKey);
-        }
+      if (roundChanged) checkAndTriggerAutoClick(observedRound);
+      else if (snap.odds && snap.odds.back) {
+        // Trigger from fresh odds only; the cached odds may belong to a locked round.
+        checkAndTriggerAutoClick(capture.round || (rounds.length + 1));
       }
     }
-    setCapture(patch);
   }
 
   // ---------------------------------------------------------------- live view of the game
@@ -354,22 +354,18 @@ function createMonitor({
   }
 
   async function checkAndTriggerAutoClick(triggerRound) {
-    if (!settings || !settings.autoClick) return;
-    if (!context || stopping || autoClicking) return;
+    if (!settings || !settings.autoClick || !context || stopping) return;
 
     const roundKey = String(triggerRound || capture.round || (rounds.length + 1));
+    // Delayed retries belong only to the round that scheduled them.
+    if (capture.round && roundKey !== String(capture.round)) return;
+    if (autoClicking) {
+      if (lastAutoClickRound !== roundKey) pendingAutoClickRound = roundKey;
+      return;
+    }
     if (lastAutoClickRound === roundKey) return;
 
     const now = Date.now();
-    const wait = 2000 - (now - lastAutoClickAt);
-    if (wait > 0) {
-      setTimeout(() => {
-        if (settings && settings.autoClick && lastAutoClickRound !== roundKey) {
-          checkAndTriggerAutoClick(roundKey);
-        }
-      }, wait);
-      return;
-    }
 
     if (session && session.active) {
       const st = V32.sessionStatus(settings, session);
@@ -408,10 +404,13 @@ function createMonitor({
 
     if (!(roundKey in autoClickTries)) autoClickTries = { [roundKey]: 0 };
     lastAutoClickRound = roundKey;
-    lastAutoClickAt = now;
     autoClicking = true;
     try {
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 150));
+      if (capture.round && roundKey !== String(capture.round)) {
+        lastAutoClickRound = null;
+        return;
+      }
       const res = await clickGameNumberAndAmount(num, amt);
       lastAutoClickAction = {
         at: Date.now(),
@@ -423,12 +422,15 @@ function createMonitor({
         detail: res,
       };
       if (res.ok) {
-        setCapture({ note: `Auto-clicked Player ${num} with amount ₹${amt} for round ${roundKey}.` });
-      } else if (res.closed && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 15) {
+        setCapture({ note: `Auto-click submitted Player ${num} with amount ₹${amt} for round ${roundKey}; verify it appears in My Bet.` });
+      } else if (res.closed && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 30) {
         // The round changed before betting opened (odds still locked): try this round again shortly.
-        lastAutoClickAction.error = `Waiting for betting to open (try ${autoClickTries[roundKey]} of 15): ${res.error}`;
-        lastAutoClickRound = null; lastAutoClickAt = 0;
-        setTimeout(() => { if (lastAutoClickRound === null && settings && settings.autoClick) checkAndTriggerAutoClick(roundKey); }, 1500);
+        lastAutoClickAction.error = `Waiting for betting to open (try ${autoClickTries[roundKey]} of 30): ${res.error}`;
+        lastAutoClickRound = null;
+        setTimeout(() => {
+          if (lastAutoClickRound === null && settings && settings.autoClick
+              && (!capture.round || roundKey === String(capture.round))) checkAndTriggerAutoClick(roundKey);
+        }, 300);
       }
     } catch (e) {
       lastAutoClickAction = {
@@ -442,6 +444,11 @@ function createMonitor({
     } finally {
       autoClicking = false;
       broadcast();
+      const queuedRound = pendingAutoClickRound;
+      pendingAutoClickRound = null;
+      if (queuedRound && settings && settings.autoClick && capture.round === queuedRound) {
+        setTimeout(() => checkAndTriggerAutoClick(queuedRound), 0);
+      }
     }
   }
   function isOwnPage(u) {

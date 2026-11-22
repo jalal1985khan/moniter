@@ -135,9 +135,56 @@ test('end to end with a real browser', async t => {
       assert.strictEqual(lastBet.player, 11);
       assert.strictEqual(lastBet.amount, 20);
 
+      // The dashboard's one-time button must click the actual bet control and submit the stake.
+      // Include a misleading "My Bet" button before an unlabeled BET control: generic substring
+      // selectors used to click the tab and claim success without submitting the wager.
+      const dashboard = await game().context().newPage();
+      dashboard.on('dialog', d => d.accept());
+      try {
+        await dashboard.goto(base);
+        await dashboard.selectOption('#acNumber', '11');
+        await dashboard.locator('#acAmount').fill('20');
+        await demo(() => {
+          window.__demo.lastBet = null;
+          const place = document.getElementById('placeBetBtn');
+          place.removeAttribute('id'); place.className = ''; place.textContent = 'BET';
+          const decoy = document.createElement('button'); decoy.textContent = 'My Bet'; decoy.id = 'myBetDecoy';
+          document.body.prepend(decoy);
+        });
+        await dashboard.locator('#acClickNow').click();
+        try {
+          await until(async () => {
+            const b = await demo(() => window.__demo.lastBet);
+            return b && b.player === 11 && b.amount === 20;
+          }, 'the dashboard Bet once now button to submit one bet', 10000);
+        } catch (e) {
+          const detail = await demo(() => ({lastBet: window.__demo.lastBet, status: document.getElementById('slipStatus').textContent,
+            odds: document.querySelector('.btn-back[data-player="11"]').textContent}));
+          throw new Error(`${e.message}; action=${JSON.stringify(m.state().autoClick.lastAction)}; game=${JSON.stringify(detail)}; ui=${await dashboard.locator('#acMsg').innerText()}`);
+        }
+        await dashboard.locator('#acMsg').waitFor({state: 'visible'});
+        assert.match(await dashboard.locator('#acMsg').innerText(), /Bet submitted: Player 11/);
+      } finally {
+        await demo(() => {
+          document.getElementById('myBetDecoy')?.remove();
+          const bet = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'BET');
+          if (bet) { bet.id = 'placeBetBtn'; bet.className = 'btn-place'; bet.textContent = 'Place Bet'; }
+        });
+        await dashboard.close();
+      }
+
       // 3. Immediate auto-click when enabled while betting is open
       await demo(() => { window.__demo.lastBet = null; });
+      await demo(() => {
+        document.querySelectorAll('.odds-row[data-player="11"] button').forEach(b => {
+          b.dataset.testOriginal = b.textContent; b.textContent = 'LOCKED';
+        });
+      });
       await post('/api/autoclick/toggle', {enabled: true, number: '11', amount: 20});
+      await until(() => /Waiting for betting to open/.test(m.state().autoClick.lastAction?.error || ''), 'auto-click to wait while the market is locked', 5000);
+      await demo(() => document.querySelectorAll('.odds-row[data-player="11"] button').forEach(b => {
+        b.textContent = b.dataset.testOriginal; delete b.dataset.testOriginal;
+      }));
       await until(async () => {
         const b = await demo(() => window.__demo.lastBet);
         return b && b.player === 11 && b.amount === 20;
@@ -172,6 +219,8 @@ test('end to end with a real browser', async t => {
       assert.strictEqual(m.state().capture.status, 'stopped');
       const before = m.state().values.length;
       assert.strictEqual((await post('/api/start', {url: `${base}/demo?seconds=1`})).ok, true);
+      await until(() => m.gamePages().find(p => p.url().includes('/demo')), 'the restarted game window');
+      await demo(() => window.__demo.pause(false));
       await until(() => m.state().values.length > before, 'a new round after restart', 30000);
       const s = m.state();
       assert.ok(s.gaps.includes(before), 'first round after the restart is marked');
