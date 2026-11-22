@@ -468,7 +468,7 @@ function createMonitor({
         if (castSession === s) pushFrame(Buffer.from(data, 'base64'));
       });
       castSession = s;
-      await s.send('Page.startScreencast', {format: 'jpeg', quality: 55, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1});
+      await s.send('Page.startScreencast', {format: 'jpeg', quality: 50, maxWidth: 960, maxHeight: 540, everyNthFrame: 2});
     } catch {}
     page.on('close', () => {
       if (castPage !== page || !context) return;
