@@ -57,7 +57,7 @@
   // ---------------------------------------------------------------- settings
   const form = $('settingsForm');
   function openSettings() {
-    const s = (S && S.settings) || {budget: '', lossLimit: '', profitTarget: 0, timeLimitMin: 60, newestSide: 'auto', alarmSound: true, autoReconnect: true, autoOpenGame: true, autoClick: false, autoClickNumber: 'auto', autoClickAmount: ''};
+    const s = (S && S.settings) || {budget: '', lossLimit: '', profitTarget: 0, timeLimitMin: 60, newestSide: 'auto', alarmSound: true, autoReconnect: true, autoOpenGame: true, autoClick: false, autoClickNumber: 'auto', autoClickAmount: '', autoClickPauseAfterLoss: false};
     for (const k of ['budget', 'lossLimit', 'profitTarget', 'timeLimitMin', 'newestSide']) form.elements[k].value = s[k];
     form.elements.alarmSound.checked = s.alarmSound !== false;
     form.elements.autoReconnect.checked = s.autoReconnect !== false;
@@ -65,6 +65,7 @@
     form.elements.autoClick.checked = s.autoClick === true;
     form.elements.autoClickNumber.value = s.autoClickNumber || 'auto';
     form.elements.autoClickAmount.value = s.autoClickAmount > 0 ? s.autoClickAmount : '';
+    form.elements.autoClickPauseAfterLoss.checked = s.autoClickPauseAfterLoss === true;
     $('settingsErr').textContent = '';
     $('settings').showModal();
   }
@@ -79,6 +80,7 @@
     body.autoClick = form.elements.autoClick.checked;
     body.autoClickNumber = form.elements.autoClickNumber.value;
     body.autoClickAmount = form.elements.autoClickAmount.value;
+    body.autoClickPauseAfterLoss = form.elements.autoClickPauseAfterLoss.checked;
     const r = await post('/api/settings', body);
     if (!r.ok) { $('settingsErr').textContent = r.error; return; }
     $('settings').close();
@@ -469,13 +471,14 @@
     if (!confirm(`This places a REAL bet now: ${num === 'auto' ? 'the prediction pick' : 'Player ' + num}, ₹${amt}. Continue?`)) return;
     acShow('Placing the bet in the game…', 'muted');
     const r = await post('/api/click', { number: num, amount: amt });
-    acShow(r.ok ? `✓ Bet submitted: Player ${r.player} at ${r.detail && r.detail.odds}, ₹${r.amount}. Confirm it appears in My Bet.` : `✗ ${r.error}${acSeen(r)}`, r.ok ? 'pos' : 'err');
+    acShow(r.ok ? `✓ Bet confirmed in My Bet: Player ${r.player} at ${r.detail && r.detail.odds}, ₹${r.amount}.` : `⚠ ${r.error}${acSeen(r)}`, r.ok ? 'pos' : 'err');
   };
   function renderAutoClick() {
     const ac = S && S.autoClick;
     const enabled = !!(ac && ac.enabled);
-    $('acState').textContent = enabled ? `Active · ${ac.number === 'auto' ? 'prediction pick' : 'P' + ac.number} @ ₹${ac.amount}` : 'Off';
-    $('acState').className = enabled ? 'pos' : 'muted';
+    const waiting = !!(ac && ac.waitingForPrediction && ac.pauseAfterLoss);
+    $('acState').textContent = waiting ? 'Paused after loss · waiting for a prediction match' : enabled ? `Active · ${ac.number === 'auto' ? 'prediction pick' : 'P' + ac.number} @ ₹${ac.amount}` : 'Off';
+    $('acState').className = waiting ? 'warn' : enabled ? 'pos' : 'muted';
     $('acToggle').textContent = enabled ? '■ Disable auto-click' : '▶ Enable auto-click';
     $('acToggle').className = enabled ? 'danger' : 'primary';
     if (ac) {
@@ -483,11 +486,16 @@
       if (document.activeElement !== $('acAmount') && ac.amount > 0 && !$('acAmount').value) $('acAmount').value = ac.amount;
     }
     const act = ac && ac.lastAction;
+    if (waiting && document.activeElement !== $('acClickNow')) {
+      $('acMsg').textContent = 'Paused after a losing bet. Auto-click resumes when its prediction matches a captured result, then bets when the next round opens. This does not improve the game odds.';
+      $('acMsg').className = 'warn';
+      return;
+    }
     if (act && document.activeElement !== $('acClickNow')) {
       const ago = Math.round((Date.now() - act.at) / 1000);
       const timeStr = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
       if (act.ok) {
-        $('acMsg').textContent = `✓ Bet submitted: Player ${act.number}${act.detail && act.detail.detail ? ' at ' + act.detail.detail.odds : ''}, ₹${act.amount}. Confirm it appears in My Bet. (${timeStr})`;
+        $('acMsg').textContent = `✓ Bet confirmed in My Bet: Player ${act.number}${act.detail && act.detail.detail ? ' at ' + act.detail.detail.odds : ''}, ₹${act.amount}. (${timeStr})`;
         $('acMsg').className = 'pos';
       } else if (act.error) {
         $('acMsg').textContent = `⚠ ${act.error} (${timeStr})${act.detail && act.detail.seen ? `\nWhat the game page showed: ${act.detail.seen}` : ''}`;

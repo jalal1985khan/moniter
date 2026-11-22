@@ -353,17 +353,39 @@ test('autoplay refuses a stake bigger than its stop-loss', () => {
 });
 
 test('settings support autoClick, autoClickNumber and autoClickAmount', () => {
-  const s = V32.checkSettings({budget: 500, lossLimit: 100, autoClick: true, autoClickNumber: '11', autoClickAmount: 200});
+  const s = V32.checkSettings({budget: 500, lossLimit: 100, autoClick: true, autoClickNumber: '11', autoClickAmount: 200, autoClickPauseAfterLoss: true});
   assert.strictEqual(s.ok, true);
   assert.strictEqual(s.settings.autoClick, true);
   assert.strictEqual(s.settings.autoClickNumber, '11');
   assert.strictEqual(s.settings.autoClickAmount, 200);
+  assert.strictEqual(s.settings.autoClickPauseAfterLoss, true);
+});
+
+test('auto-pause signal compares each result with a prediction made from earlier rounds', () => {
+  const history = Array(30).fill(11);
+  const prediction = V32.autoPrediction(history);
+  assert.strictEqual(prediction.number, 11, 'the low-history fallback is explicit and testable');
+  assert.ok(prediction.method);
+  assert.strictEqual(V32.autoPrediction([...history, 9]).number, V32.SYSTEMS[V32.autoChoose([...history, 9]).method]([...history, 9]));
+});
+
+test('auto-click loss gate pauses on one loss and resumes only after a later prediction hit', () => {
+  let gate = V32.advanceAutoClickLossGate(false, {pauseAfterLoss: true, loss: true, prediction: 11, result: 9});
+  assert.deepStrictEqual(gate, {waiting: true, paused: true, matched: false});
+  gate = V32.advanceAutoClickLossGate(gate.waiting, {pauseAfterLoss: true, prediction: 11, result: 10});
+  assert.deepStrictEqual(gate, {waiting: true, paused: false, matched: false});
+  gate = V32.advanceAutoClickLossGate(gate.waiting, {pauseAfterLoss: true, prediction: 11, result: 11});
+  assert.deepStrictEqual(gate, {waiting: false, paused: false, matched: true});
+  gate = V32.advanceAutoClickLossGate(true, {pauseAfterLoss: false, prediction: 11, result: 10});
+  assert.deepStrictEqual(gate, {waiting: false, paused: false, matched: false});
 });
 
 test('autoclick toggle and state endpoint work through the monitor', () => withMonitor(async ({call}) => {
-  await call('/api/settings', {budget: 500, lossLimit: 100, profitTarget: 0, timeLimitMin: 0, newestSide: 'right'});
+  await call('/api/settings', {budget: 500, lossLimit: 100, profitTarget: 0, timeLimitMin: 0, newestSide: 'right', autoClickPauseAfterLoss: true});
   let s = await call('/api/state');
   assert.strictEqual(s.autoClick.enabled, false);
+  assert.strictEqual(s.autoClick.pauseAfterLoss, true);
+  assert.strictEqual(s.autoClick.waitingForPrediction, false);
 
   const toggled = await call('/api/autoclick/toggle', {enabled: true, number: '10', amount: 50});
   assert.strictEqual(toggled.ok, true);

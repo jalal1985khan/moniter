@@ -34,7 +34,7 @@ button:disabled{opacity:.5;cursor:default}
 .balchip b{font-size:15px}
 .balchip.flash-up{background:color-mix(in srgb,var(--good) 30%,var(--chip))}
 .balchip.flash-down{background:color-mix(in srgb,var(--bad) 30%,var(--chip))}
-.pos{color:var(--good)}.neg{color:var(--bad)}
+.pos{color:var(--good)}.neg{color:var(--bad)}.warn{color:var(--warn)}
 .vs-t td.ok{color:var(--good);font-weight:600}.vs-t td.no{color:var(--bad)}
 .vs-t td,.vs-t th{white-space:nowrap}
 .ball{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#fff;font-size:11px;font-weight:700}
@@ -57,6 +57,7 @@ button:disabled{opacity:.5;cursor:default}
 .meter.loss .bar i{background:var(--bad)}.meter.target .bar i{background:var(--good)}
 .preview-wrap{position:relative;container-type:inline-size}
 .ov-timer{position:absolute;top:8px;left:8px;background:rgba(10,14,20,.85);color:#5fc28f;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:4px 10px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);display:flex;align-items:center;gap:6px;z-index:2;box-shadow:0 2px 6px rgba(0,0,0,.4);pointer-events:none}
+.ov-timer[hidden]{display:none}
 .ov-timer.low{color:#f5c04a;border-color:rgba(245,192,74,.4)}
 .ov-timer.zero{color:#ef7b7a;border-color:rgba(239,123,122,.4)}
 .ov{position:absolute;top:8px;right:8px;background:rgba(10,14,20,.82);color:#eef2f6;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 8px;font-size:11px;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);pointer-events:none}
@@ -433,6 +434,7 @@ label.f small{color:var(--muted)}
         <input name="autoClickAmount" type="number" min="1" step="any" placeholder="e.g. 100">
       </label>
     </div>
+    <label class="row" style="font-size:13px;align-items:flex-start"><input name="autoClickPauseAfterLoss" type="checkbox" style="width:auto;flex:0 0 auto;margin-top:3px"> <span><b>After any losing bet, pause auto-click</b><small style="display:block">Resume on the next round after the auto-prediction matches a captured result. This waits for a hit; it cannot predict or improve the odds.</small></span></label>
     <p class="err" id="settingsErr"></p>
     <div class="row"><button type="button" id="cancelSettings">Cancel</button><button class="primary" type="submit">Save</button></div>
   </form>

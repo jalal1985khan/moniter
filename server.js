@@ -56,6 +56,8 @@ function createMonitor({
   let resumeGap = false; // The next new result follows a break in capture.
   let context = null, stopping = false, gamePage = null, gameFrame = null;
   let lastAutoClickRound = null, lastAutoClickAction = null, autoClicking = false, autoClickTries = {}, pendingAutoClickRound = null;
+  let autoClickWaitingForPrediction = !!(settings && settings.autoClickWaitingForPrediction);
+  const pendingConfirmedBets = [];
   const clients = new Set(), viewers = new Set();
   let frame = null, castPage = null, castSession = null, lastFrameAt = 0, grabbing = false;
 
@@ -77,6 +79,8 @@ function createMonitor({
         enabled: !!(settings && settings.autoClick),
         number: (settings && settings.autoClickNumber) || 'auto',
         amount: (settings && settings.autoClickAmount > 0) ? settings.autoClickAmount : null,
+        pauseAfterLoss: !!(settings && settings.autoClickPauseAfterLoss),
+        waitingForPrediction: autoClickWaitingForPrediction,
         lastAction: lastAutoClickAction,
       },
     };
@@ -89,6 +93,52 @@ function createMonitor({
       const msg = `data: ${JSON.stringify(state())}\n\n`;
       for (const res of clients) res.write(msg);
     }, 100);
+  }
+  function setAutoClickWaitingForPrediction(waiting) {
+    autoClickWaitingForPrediction = !!waiting;
+    if (settings) {
+      settings.autoClickWaitingForPrediction = autoClickWaitingForPrediction;
+      store.saveSettings(settings);
+    }
+  }
+  function rememberConfirmedBet(number, amount) {
+    pendingConfirmedBets.push({number: Number(number), amount: Number(amount), afterRoundCount: rounds.length});
+  }
+  function settleConfirmedBets(rows) {
+    if (!rows.length) return;
+    let history = rounds.map(x => x.n);
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i], roundIndex = rounds.length + i;
+      const wasWaiting = autoClickWaitingForPrediction;
+      const signal = V32.autoPrediction(history);
+      let lost = false, unknown = false;
+      for (let j = pendingConfirmedBets.length - 1; j >= 0; j--) {
+        const bet = pendingConfirmedBets[j];
+        if (roundIndex < bet.afterRoundCount) continue;
+        pendingConfirmedBets.splice(j, 1);
+        if (row.gap) unknown = true;
+        else if (row.n !== bet.number) lost = true;
+      }
+      const gate = V32.advanceAutoClickLossGate(wasWaiting, {
+        pauseAfterLoss: !!(settings && settings.autoClickPauseAfterLoss),
+        loss: lost, unknown, prediction: signal.number, result: row.n, gap: !!row.gap,
+      });
+      if (gate.waiting !== autoClickWaitingForPrediction) setAutoClickWaitingForPrediction(gate.waiting);
+      if (gate.paused) {
+        lastAutoClickAction = {
+          at: Date.now(), ok: false, number: null, amount: null,
+          error: unknown
+            ? 'Auto-click paused: a confirmed bet crossed a capture gap, so its result is unknown. Waiting for a prediction match.'
+            : `Auto-click paused after a loss. Waiting for the auto-prediction to match a captured result before betting again.`,
+        };
+      } else if (gate.matched) {
+        lastAutoClickAction = {
+          at: Date.now(), ok: false, number: signal.number, amount: null,
+          error: `Prediction matched Player ${row.n}. Auto-click will resume when the next round opens.`,
+        };
+      }
+      history.push(row.n);
+    }
   }
   const setCapture = patch => { capture = { ...capture, ...patch }; broadcast(); };
 
@@ -202,6 +252,7 @@ function createMonitor({
         let label = resuming ? null : (patch.round || capture.round);
         if (label && rounds.length && rounds[rounds.length - 1].round === label) label = null;
         const rows = r.added.map((n, i) => ({ n, t: now, round: i === r.added.length - 1 ? label : null, ...(gapFirst && i === 0 ? { gap: true } : {}) }));
+        settleConfirmedBets(rows);
         // Practice autoplay settles its pretend bet on each new result, in order.
         if (practice && practice.active) {
           let hist = rounds.map(x => x.n);
@@ -231,7 +282,7 @@ function createMonitor({
       if (roundChanged) checkAndTriggerAutoClick(observedRound);
       else if (snap.odds && snap.odds.back) {
         // Trigger from fresh odds only; the cached odds may belong to a locked round.
-        checkAndTriggerAutoClick(capture.round || (rounds.length + 1));
+        checkAndTriggerAutoClick(capture.round || null);
       }
     }
   }
@@ -361,7 +412,19 @@ function createMonitor({
   async function checkAndTriggerAutoClick(triggerRound) {
     if (!settings || !settings.autoClick || !context || stopping) return;
 
-    const roundKey = String(triggerRound || capture.round || (rounds.length + 1));
+    if (settings.autoClickPauseAfterLoss && autoClickWaitingForPrediction) {
+      lastAutoClickAction = {
+        at: Date.now(), ok: false,
+        error: 'Auto-click paused after a loss. Waiting for the auto-prediction to match a captured result.',
+      };
+      broadcast();
+      return;
+    }
+
+    const knownRound = triggerRound || capture.round;
+    const sequence = rounds.length + 1;
+    // Do not label our local capture count as if it were the game's Round ID.
+    const roundKey = knownRound ? String(knownRound) : `capture-${sequence}`;
     // Delayed retries belong only to the round that scheduled them.
     if (capture.round && roundKey !== String(capture.round)) return;
     if (autoClicking) {
@@ -371,6 +434,17 @@ function createMonitor({
     if (lastAutoClickRound === roundKey) return;
 
     const now = Date.now();
+
+    if (capture.status !== 'live' || !capture.lastSnapshotAt || now - capture.lastSnapshotAt > 5000) {
+      lastAutoClickAction = {
+        at: now,
+        round: roundKey,
+        ok: false,
+        error: 'Auto-click paused: waiting for a fresh live game reading.',
+      };
+      broadcast();
+      return;
+    }
 
     if (session && session.active) {
       const st = V32.sessionStatus(settings, session);
@@ -427,7 +501,9 @@ function createMonitor({
         detail: res,
       };
       if (res.ok) {
-        setCapture({ note: `Auto-click submitted Player ${num} with amount ₹${amt} for round ${roundKey}; verify it appears in My Bet.` });
+        rememberConfirmedBet(num, amt);
+        const roundLabel = knownRound ? `game round ${roundKey}` : `capture sequence ${sequence} (game Round ID unavailable)`;
+        setCapture({ note: `Auto-click confirmed in My Bet: Player ${num}, ₹${amt}, ${roundLabel}.` });
       } else if (res.closed && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 30) {
         // The round changed before betting opened (odds still locked): try this round again shortly.
         lastAutoClickAction.error = `Waiting for betting to open (try ${autoClickTries[roundKey]} of 30): ${res.error}`;
@@ -643,7 +719,10 @@ function createMonitor({
       if (pathname === '/api/settings') {
         const r = V32.checkSettings(body);
         if (!r.ok) return json(400, r);
-        settings = r.settings; store.saveSettings(settings);
+        const wasWaiting = autoClickWaitingForPrediction;
+        settings = {...r.settings, autoClickWaitingForPrediction: wasWaiting && r.settings.autoClickPauseAfterLoss};
+        autoClickWaitingForPrediction = settings.autoClickWaitingForPrediction;
+        store.saveSettings(settings);
         if (session && session.active) { session.alarm = null; checkLimits(); saveSession(); }
         broadcast();
         if (settings.autoClick && settings.autoClickAmount > 0) {
@@ -686,6 +765,7 @@ function createMonitor({
         if (pick.error) return json(400, { ok: false, error: pick.error[0].toUpperCase() + pick.error.slice(1) });
         const num = pick.number, amt = pick.amount;
         const res = await clickGameNumberAndAmount(num, amt);
+        if (res.ok) rememberConfirmedBet(num, amt);
         lastAutoClickAction = {
           at: Date.now(),
           round: capture.round || 'manual',
@@ -703,6 +783,8 @@ function createMonitor({
         if (body.enabled !== undefined) settings.autoClick = !!body.enabled;
         if (body.number !== undefined) settings.autoClickNumber = String(body.number);
         if (body.amount !== undefined) settings.autoClickAmount = Number(body.amount) > 0 ? Number(body.amount) : null;
+        if (body.pauseAfterLoss !== undefined) settings.autoClickPauseAfterLoss = !!body.pauseAfterLoss;
+        if (!settings.autoClickPauseAfterLoss && autoClickWaitingForPrediction) setAutoClickWaitingForPrediction(false);
         if (settings.autoClick && !(settings.autoClickAmount > 0)) { settings.autoClick = false; return json(400, { ok: false, error: 'Enter the amount to bet (₹) before turning auto-click on.' }); }
         store.saveSettings(settings);
         broadcast();

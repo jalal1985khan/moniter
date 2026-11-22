@@ -55,6 +55,19 @@ test('end to end with a real browser', async t => {
     await t.test('capture goes live on the demo table', async () => {
       assert.strictEqual((await post('/api/start', {url: `${base}/demo?seconds=1`})).ok, true);
       await until(() => m.state().capture.status === 'live', 'capture to go live');
+      // Exercise the overlay countdown fallback used by game tables that expose large blue
+      // number tiles without a timer/countdown id or class.
+      await demo(() => {
+        const timer = document.getElementById('timer');
+        timer.id = 'unlabeled-clock'; timer.className = '';
+        timer.style.cssText = 'position:absolute;right:1px;bottom:1px;background:rgb(30,70,180);color:white;font-size:44px;z-index:100';
+        timer.textContent = '27';
+      });
+      await until(() => m.state().capture.timer === 27, 'the unlabeled blue countdown tile to be captured', 5000);
+      await demo(() => {
+        const timer = document.getElementById('unlabeled-clock');
+        timer.id = 'timer'; timer.className = 'timer'; timer.removeAttribute('style');
+      });
     });
 
     await t.test('every live round is captured in order, with no gaps', async () => {
@@ -127,6 +140,7 @@ test('end to end with a real browser', async t => {
       // 2. Manual click on Player 11 with ₹20 (verifies Back odds 2.08 is clicked, stake 20 typed, and Place Bet pressed)
       const clickRes = await post('/api/click', {number: 11, amount: 20});
       assert.strictEqual(clickRes.ok, true);
+      assert.strictEqual(clickRes.verified, true, 'the demo My Bet receipt confirms acceptance');
       assert.strictEqual(clickRes.player, 11);
       assert.strictEqual(clickRes.amount, 20);
       assert.strictEqual(clickRes.detail.odds, 2.08, 'clicked the Back odds 2.08, not Lay or Odd/Even');
@@ -135,6 +149,14 @@ test('end to end with a real browser', async t => {
       assert.strictEqual(lastBet.player, 11);
       assert.strictEqual(lastBet.amount, 20);
 
+      // A click that does not create a My Bet row must never be reported as a placed bet.
+      await demo(() => { window.__demo.lastBet = null; window.__demo.suppressReceipt = true; });
+      const noReceipt = await post('/api/click', {number: 11, amount: 20});
+      assert.strictEqual(noReceipt.ok, false);
+      assert.strictEqual(noReceipt.unconfirmed, true);
+      assert.match(noReceipt.error, /My Bet did not confirm/i);
+      await demo(() => { window.__demo.suppressReceipt = false; window.__demo.lastBet = null; });
+
       // The dashboard's one-time button must click the actual bet control and submit the stake.
       // Include a misleading "My Bet" button before an unlabeled BET control: generic substring
       // selectors used to click the tab and claim success without submitting the wager.
@@ -142,6 +164,12 @@ test('end to end with a real browser', async t => {
       dashboard.on('dialog', d => d.accept());
       try {
         await dashboard.goto(base);
+        await until(async () => await dashboard.locator('#ovTimer').isVisible(), 'the live countdown overlay to appear', 5000);
+        assert.match(await dashboard.locator('#ovTimerSec').innerText(), /^\d+$/);
+        m.onSnapshot({timer: null});
+        await until(async () => !(await dashboard.locator('#ovTimer').isVisible()), 'the countdown overlay to hide when no timer is readable', 5000);
+        m.onSnapshot({timer: 27});
+        await until(async () => (await dashboard.locator('#ovTimerSec').innerText()) === '27', 'the countdown overlay to show the captured seconds', 5000);
         await dashboard.selectOption('#acNumber', '11');
         await dashboard.locator('#acAmount').fill('20');
         await demo(() => {
@@ -162,8 +190,8 @@ test('end to end with a real browser', async t => {
             odds: document.querySelector('.btn-back[data-player="11"]').textContent}));
           throw new Error(`${e.message}; action=${JSON.stringify(m.state().autoClick.lastAction)}; game=${JSON.stringify(detail)}; ui=${await dashboard.locator('#acMsg').innerText()}`);
         }
-        await dashboard.locator('#acMsg').waitFor({state: 'visible'});
-        assert.match(await dashboard.locator('#acMsg').innerText(), /Bet submitted: Player 11/);
+        await until(async () => /Bet confirmed in My Bet: Player 11/.test(await dashboard.locator('#acMsg').innerText()), 'the UI to show the confirmed My Bet receipt', 5000);
+        assert.match(await dashboard.locator('#acMsg').innerText(), /Bet confirmed in My Bet: Player 11/);
       } finally {
         await demo(() => {
           document.getElementById('myBetDecoy')?.remove();
@@ -194,15 +222,23 @@ test('end to end with a real browser', async t => {
         const b = await demo(() => window.__demo.lastBet);
         return b && b.player === expectedPlayer && b.amount === 20;
       }, 'immediate auto-click on enable', 10000);
+      await until(() => m.state().autoClick.lastAction?.ok === true
+        && m.state().autoClick.lastAction.number === expectedPlayer,
+      'My Bet receipt confirmation', 5000);
       assert.strictEqual(m.state().autoClick.lastAction.number, expectedPlayer);
       assert.strictEqual(m.state().autoClick.lastAction.ok, true);
 
       // 4. Auto-click for the next round after results update
       await demo(() => { window.__demo.lastBet = null; });
+      const previousCount = m.state().values.length;
       await demo(() => window.__demo.burst(1));
+      await until(() => m.state().values.length > previousCount, 'the next captured result', 8000);
+      const nextHistory = m.state().values;
+      const nextChoice = V32.autoChoose(nextHistory);
+      const nextExpectedPlayer = V32.SYSTEMS[nextChoice.method](nextHistory);
       await until(async () => {
         const b = await demo(() => window.__demo.lastBet);
-        return b && b.player === 11 && b.amount === 20;
+        return b && b.player === nextExpectedPlayer && b.amount === 20;
       }, 'auto-click for next round to be placed', 15000);
       await post('/api/autoclick/toggle', {enabled: false});
     });

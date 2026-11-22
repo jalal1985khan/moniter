@@ -26,6 +26,7 @@ body{margin:0;background:#1d2733;color:#eef;font:14px system-ui,sans-serif}
 .chips{margin:16px;display:flex;gap:10px;align-items:center}
 .chip{width:42px;height:42px;border-radius:50%;color:#fff;font-weight:700;border:2px solid #fff;cursor:pointer;display:grid;place-items:center}
 .slip{margin:16px;padding:10px 14px;background:#243342;border-radius:6px;display:flex;gap:12px;align-items:center}
+.my-bet{margin:16px;padding:10px 14px;background:#243342;border-radius:6px}
 .btn-place{padding:6px 18px;background:#27ae60;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:700}
 </style>
 </head>
@@ -75,6 +76,8 @@ body{margin:0;background:#1d2733;color:#eef;font:14px system-ui,sans-serif}
   <button class="chip" data-amount="1000" style="background:#8e44ad">1000</button>
 </div>
 
+<div class="my-bet" id="myBetPanel"><b>My Bet</b><div>Matched Bet &nbsp; Odds &nbsp; Stake</div><div id="myBetRows"></div></div>
+
 <div class="slip">
   <span>Selected: <b id="slipTarget">None</b></span>
   <label>Stake: <input type="number" id="stakeInput" placeholder="Amount" value="100" style="width:80px;padding:4px 8px;border-radius:4px;border:1px solid #555"></label>
@@ -119,6 +122,12 @@ function recordBet() {
   const b = {player: p, amount: amt, time: Date.now()};
   window.__demo.placedBets.push(b);
   window.__demo.lastBet = b;
+  if (!window.__demo.suppressReceipt) {
+    const row = document.createElement('div');
+    const odds = document.querySelector(`.btn-back[data-player="${p}"]`).textContent.trim();
+    row.textContent = `Player ${p} · ${odds} · ₹${amt}`;
+    document.getElementById('myBetRows').append(row);
+  }
   document.getElementById('slipStatus').textContent = `Bet placed: P${p} @ ₹${amt}`;
   return b;
 }
@@ -134,7 +143,7 @@ document.getElementById('placeBetBtn').onclick = recordBet;
 let left=seconds,paused=false;draw(null);
 function next(){const r=play();history.push(r.w);bal+=r.w===11?50*0.95:-50;draw(r);round++;return r}
 // Hooks for the end-to-end tests: the true results, several rounds at once, pause.
-window.__demo={history,start:history.length,burst:n=>{for(let i=0;i<n;i++)next()},pause:v=>{paused=v},setBalance:v=>{bal=v;document.getElementById('bal').textContent=bal.toFixed(2)},disconnect:()=>{document.getElementById('dc').style.display='block'},reconnected:0,placedBets:[],lastBet:null};
+window.__demo={history,start:history.length,burst:n=>{for(let i=0;i<n;i++)next()},pause:v=>{paused=v},setBalance:v=>{bal=v;document.getElementById('bal').textContent=bal.toFixed(2)},disconnect:()=>{document.getElementById('dc').style.display='block'},reconnected:0,placedBets:[],lastBet:null,suppressReceipt:false};
 document.getElementById('rc').onclick=()=>{document.getElementById('dc').style.display='none';window.__demo.reconnected++};
 setInterval(()=>{
   if(paused)return;
