@@ -37,22 +37,38 @@ body{margin:0;background:#1d2733;color:#eef;font:14px system-ui,sans-serif}
 <div class="balls" id="balls"></div>
 
 <div class="odds-box">
-  <div style="font-weight:700;margin-bottom:6px">Player Odds (Back / Lay)</div>
+  <div style="font-weight:700;margin-bottom:6px">Player Odds (Back / Lay & Odd / Even)</div>
   <table class="odds-table">
     <thead>
-      <tr><th>Player</th><th style="background:#2f6fde">Back</th><th style="background:#c23b3b">Lay</th></tr>
+      <tr>
+        <th>Player</th><th style="background:#2f6fde">Back</th><th style="background:#c23b3b">Lay</th>
+        <th>Player</th><th style="background:#4a6fa5">Odd</th><th style="background:#6c757d">Even</th>
+      </tr>
     </thead>
     <tbody>
-      <tr class="odds-row" data-player="8"><td>Player 8</td><td><button class="btn-back" data-player="8">12.2</button></td><td><button class="btn-lay">13.7</button></td></tr>
-      <tr class="odds-row" data-player="9"><td>Player 9</td><td><button class="btn-back" data-player="9">5.95</button></td><td><button class="btn-lay">6.45</button></td></tr>
-      <tr class="odds-row" data-player="10"><td>Player 10</td><td><button class="btn-back" data-player="10">3.2</button></td><td><button class="btn-lay">3.45</button></td></tr>
-      <tr class="odds-row" data-player="11"><td>Player 11</td><td><button class="btn-back" data-player="11">2.08</button></td><td><button class="btn-lay">2.18</button></td></tr>
+      <tr class="odds-row" data-player="8">
+        <td>Player 8</td><td><button class="btn-back" data-player="8">12.2</button></td><td><button class="btn-lay">13.7</button></td>
+        <td>Player 8</td><td><button class="btn-odd">1.97</button></td><td><button class="btn-even">1.97</button></td>
+      </tr>
+      <tr class="odds-row" data-player="9">
+        <td>Player 9</td><td><button class="btn-back" data-player="9">5.95</button></td><td><button class="btn-lay">6.45</button></td>
+        <td>Player 9</td><td><button class="btn-odd">1.97</button></td><td><button class="btn-even">1.97</button></td>
+      </tr>
+      <tr class="odds-row" data-player="10">
+        <td>Player 10</td><td><button class="btn-back" data-player="10">3.2</button></td><td><button class="btn-lay">3.45</button></td>
+        <td>Player 10</td><td><button class="btn-odd">1.97</button></td><td><button class="btn-even">1.97</button></td>
+      </tr>
+      <tr class="odds-row" data-player="11">
+        <td>Player 11</td><td><button class="btn-back" data-player="11">2.08</button></td><td><button class="btn-lay">2.18</button></td>
+        <td>Player 11</td><td><button class="btn-odd">1.97</button></td><td><button class="btn-even">1.97</button></td>
+      </tr>
     </tbody>
   </table>
 </div>
 
 <div class="chips">
   <b>Chips:</b>
+  <button class="chip" data-amount="20" style="background:#f39c12">20</button>
   <button class="chip" data-amount="50" style="background:#e67e22">50</button>
   <button class="chip" data-amount="100" style="background:#27ae60">100</button>
   <button class="chip" data-amount="500" style="background:#2980b9">500</button>
@@ -108,7 +124,7 @@ function recordBet() {
 }
 
 document.querySelectorAll('.btn-back').forEach(b => {
-  b.onclick = () => { selectPlayer(Number(b.dataset.player)); recordBet(); };
+  b.onclick = () => { selectPlayer(Number(b.dataset.player)); };
 });
 document.querySelectorAll('.chip').forEach(c => {
   c.onclick = () => selectAmount(Number(c.dataset.amount));

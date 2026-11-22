@@ -114,24 +114,40 @@ test('end to end with a real browser', async t => {
       assert.strictEqual(m.state().pastSessions[0].reason, 'limit: loss');
     });
 
-    await t.test('clicking number and amount in the game window', async () => {
-      // 1. Manual click via /api/click
-      const clickRes = await post('/api/click', {number: 11, amount: 100});
+    await t.test('capturing table odds and clicking number and amount in the game window', async () => {
+      // 1. Verify odds are captured from the side-by-side table
+      await until(() => m.state().tableOdds && m.state().tableOdds.back, 'table odds to be captured', 10000);
+      const to = m.state().tableOdds;
+      assert.strictEqual(to.back[11], 2.08, 'Player 11 Back odds captured correctly');
+      assert.strictEqual(to.lay[11], 2.18, 'Player 11 Lay odds captured correctly');
+      assert.strictEqual(to.odd[11], 1.97, 'Player 11 Odd odds captured correctly');
+
+      // 2. Manual click on Player 11 with ₹20 (verifies Back odds 2.08 is clicked, stake 20 typed, and Place Bet pressed)
+      const clickRes = await post('/api/click', {number: 11, amount: 20});
       assert.strictEqual(clickRes.ok, true);
       assert.strictEqual(clickRes.player, 11);
-      assert.strictEqual(clickRes.amount, 100);
+      assert.strictEqual(clickRes.amount, 20);
+      assert.strictEqual(clickRes.detail.odds, 2.08, 'clicked the Back odds 2.08, not Lay or Odd/Even');
       const lastBet = await demo(() => window.__demo.lastBet);
-      assert.ok(lastBet);
+      assert.ok(lastBet, 'bet was received and recorded by game table');
       assert.strictEqual(lastBet.player, 11);
-      assert.strictEqual(lastBet.amount, 100);
+      assert.strictEqual(lastBet.amount, 20);
 
-      // 2. Auto-click for next round
-      await post('/api/autoclick/toggle', {enabled: true, number: '9', amount: 500});
+      // 3. Immediate auto-click when enabled while betting is open
+      await demo(() => { window.__demo.lastBet = null; });
+      await post('/api/autoclick/toggle', {enabled: true, number: '11', amount: 20});
+      await until(async () => {
+        const b = await demo(() => window.__demo.lastBet);
+        return b && b.player === 11 && b.amount === 20;
+      }, 'immediate auto-click on enable', 10000);
+
+      // 4. Auto-click for the next round after results update
+      await demo(() => { window.__demo.lastBet = null; });
       await demo(() => window.__demo.burst(1));
       await until(async () => {
         const b = await demo(() => window.__demo.lastBet);
-        return b && b.player === 9 && b.amount === 500;
-      }, 'auto-click for Player 9 with ₹500 to be recorded', 15000);
+        return b && b.player === 11 && b.amount === 20;
+      }, 'auto-click for next round to be placed', 15000);
       await post('/api/autoclick/toggle', {enabled: false});
     });
 

@@ -353,8 +353,20 @@ function createMonitor({
   async function checkAndTriggerAutoClick(triggerRound) {
     if (!settings || !settings.autoClick) return;
     if (!context || stopping || autoClicking) return;
+
+    const roundKey = String(triggerRound || capture.round || (rounds.length + 1));
+    if (lastAutoClickRound === roundKey) return;
+
     const now = Date.now();
-    if (now - lastAutoClickAt < 2500) return;
+    const wait = 2000 - (now - lastAutoClickAt);
+    if (wait > 0) {
+      setTimeout(() => {
+        if (settings && settings.autoClick && lastAutoClickRound !== roundKey) {
+          checkAndTriggerAutoClick(roundKey);
+        }
+      }, wait);
+      return;
+    }
 
     if (session && session.active) {
       const st = V32.sessionStatus(settings, session);
@@ -369,9 +381,6 @@ function createMonitor({
         return;
       }
     }
-
-    const roundKey = String(triggerRound || capture.round || (rounds.length + 1));
-    if (lastAutoClickRound === roundKey) return;
 
     const pick = chooseClick(settings.autoClickNumber, settings.autoClickAmount);
     if (pick.error) {
