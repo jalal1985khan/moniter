@@ -117,6 +117,8 @@ test('end to end with a real browser', async t => {
     await t.test('capturing table odds and clicking number and amount in the game window', async () => {
       // 1. Verify odds are captured from the side-by-side table
       await until(() => m.state().tableOdds && m.state().tableOdds.back, 'table odds to be captured', 10000);
+      await until(() => typeof m.state().capture.timer === 'number', 'countdown timer to be captured', 5000);
+      assert.ok(m.state().capture.timer >= 0 && m.state().capture.timer <= 60, 'timer countdown value is valid');
       const to = m.state().tableOdds;
       assert.strictEqual(to.back[11], 2.08, 'Player 11 Back odds captured correctly');
       assert.strictEqual(to.lay[11], 2.18, 'Player 11 Lay odds captured correctly');

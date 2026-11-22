@@ -246,6 +246,20 @@
       + `balance ${money(P.balance)} <span class="${net > 0 ? 'up' : net < 0 ? 'down' : 'flat'}">(${net >= 0 ? '+' : '−'}${money(Math.abs(net))})</span> · won ${P.wins} of ${P.rounds}</div>`;
   }
 
+  function renderTimer(c) {
+    const el = $('ovTimer');
+    if (!el) return;
+    const t = c && c.timer;
+    if (t == null || !['waiting', 'live', 'stale'].includes(c && c.status)) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    $('ovTimerSec').textContent = t;
+    el.className = 'ov-timer' + (t <= 5 ? (t === 0 ? ' zero' : ' low') : '');
+    $('ovTimerIcon').textContent = t > 0 ? '⏳' : '🔒';
+  }
+
   function renderOverlay(force) {
     const ov = $('ov');
     const show = ovOn && ['waiting', 'live', 'stale'].includes(S.capture.status);
@@ -253,7 +267,7 @@
     if (!show) return;
     const values = S.values || [];
     const P = S.practice;
-    const key = values.length + ':' + values.at(-1) + ':' + S.capture.balance + ':' + (S.liveValues || []).length
+    const key = values.length + ':' + values.at(-1) + ':' + S.capture.balance + ':' + S.capture.timer + ':' + (S.liveValues || []).length
       + ':' + (P ? [P.active, P.rounds, P.bets.length, P.nextPick, P.nextOdds].join() : '');
     if (!force && key === ovKey) return;
     ovKey = key;
@@ -275,17 +289,19 @@
     }).join('');
     const live = S.liveValues || [], hitsL = live.filter(v => v === likely).length;
     const btns = `<span class="ov-btns"><button data-ov="min" title="Minimise">–</button><button data-ov="${ovSize === 'max' ? 'normal' : 'max'}" title="${ovSize === 'max' ? 'Normal size' : 'Maximise'}">${ovSize === 'max' ? '❐' : '□'}</button></span>`;
+    const timerTag = S.capture.timer != null ? ` · <span class="${S.capture.timer <= 5 ? 'down' : 'up'}">⏳ ${S.capture.timer}s</span>` : '';
     if (ovSize === 'min') {
       ov.className = 'ov min';
       const ac = V32.autoChoose(values), ap = V32.SYSTEMS[ac.method](values);
       ov.innerHTML = `<div class="ov-mini"><span class="flat">auto</span> <span class="dot" style="background:${PLAYER_COLOR[ap]}"></span><b>P${ap}</b> <span class="flat">${esc(ac.method.replace('Always ', ''))}</span>`
         + `${last != null ? ` · last P${last}` : ''}`
+        + `${S.capture.timer != null ? ` · ⏳ ${S.capture.timer}s` : ''}`
         + ` · best odds P${likely}${S.capture.balance != null ? ` · ${money(S.capture.balance)}` : ''}`
         + `<span class="ov-btns"><button data-ov="normal" title="Restore">▢</button></span></div>`;
       return;
     }
     ov.className = 'ov' + (ovSize === 'max' ? ' max' : '');
-    ov.innerHTML = `<h4>WIN % · LAST ${n} ROUNDS${S.capture.balance != null ? ` · BAL ${money(S.capture.balance)}` : ''}${btns}</h4><table><thead><tr><th>Player</th><th>True</th><th>Last ${n}</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table>`
+    ov.innerHTML = `<h4>WIN % · LAST ${n} ROUNDS${timerTag}${S.capture.balance != null ? ` · BAL ${money(S.capture.balance)}` : ''}${btns}</h4><table><thead><tr><th>Player</th><th>True</th><th>Last ${n}</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table>`
       + pickStrip(likely, last, win)
       + `<div class="foot">Change = last ${n} − true, in points. Swings don't predict the next round.</div>`;
   }
@@ -563,6 +579,7 @@
     $('start').disabled = ['starting', 'waiting', 'live', 'stale'].includes(c.status);
     $('stop').disabled = c.status === 'stopped';
     preview(['waiting', 'live', 'stale'].includes(c.status));
+    renderTimer(c);
     renderOverlay();
     renderBalance(c);
     renderVs();

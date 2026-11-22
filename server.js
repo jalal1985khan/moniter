@@ -51,7 +51,7 @@ function createMonitor({
   let practice = store.loadPractice();
   let tableOdds = store.loadTableOdds(); // The latest odds read from the table: {back, lay, odd, even, at}. // Practice autoplay: pretend bets scored on real results.
   let url = store.loadUrl();
-  let capture = { status: 'stopped', note: 'Enter the game address and click Start capture.', lastSnapshotAt: 0, lastRoundAt: 0, round: null, balance: null, side: null };
+  let capture = { status: 'stopped', note: 'Enter the game address and click Start capture.', lastSnapshotAt: 0, lastRoundAt: 0, round: null, balance: null, timer: null, side: null };
   let lastStrip = null; // The "Last Result" row as last read, in page order.
   let resumeGap = false; // The next new result follows a break in capture.
   let context = null, stopping = false, gamePage = null, gameFrame = null;
@@ -148,6 +148,7 @@ function createMonitor({
     const now = Date.now();
     const patch = { lastSnapshotAt: now };
     if (snap.round) patch.round = String(snap.round).slice(0, 40);
+    if (snap.timer !== undefined) patch.timer = snap.timer;
     const o = snap.odds;
     const okTable = t => t && V32.PLAYERS.every(p => Number(t[p]) > 1 && Number(t[p]) < 1000);
     if (o && (okTable(o.back) || okTable(o.odd))) {

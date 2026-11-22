@@ -56,6 +56,9 @@ button:disabled{opacity:.5;cursor:default}
 .meter .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
 .meter.loss .bar i{background:var(--bad)}.meter.target .bar i{background:var(--good)}
 .preview-wrap{position:relative;container-type:inline-size}
+.ov-timer{position:absolute;top:8px;left:8px;background:rgba(10,14,20,.85);color:#5fc28f;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:4px 10px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);display:flex;align-items:center;gap:6px;z-index:2;box-shadow:0 2px 6px rgba(0,0,0,.4);pointer-events:none}
+.ov-timer.low{color:#f5c04a;border-color:rgba(245,192,74,.4)}
+.ov-timer.zero{color:#ef7b7a;border-color:rgba(239,123,122,.4)}
 .ov{position:absolute;top:8px;right:8px;background:rgba(10,14,20,.82);color:#eef2f6;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 8px;font-size:11px;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);pointer-events:none}
 .ov-btns{float:right;display:inline-flex;gap:4px;margin-left:10px;pointer-events:auto}
 .ov-btns button{all:unset;cursor:pointer;width:18px;height:18px;line-height:18px;text-align:center;border-radius:4px;background:rgba(255,255,255,.12);color:#e7ecf1;font-size:12px}
@@ -247,6 +250,7 @@ label.f small{color:var(--muted)}
         <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="ovToggle" checked> Win % overlay</label></div>
       <div class="preview-wrap">
         <div class="preview" id="preview"><div class="empty">Start capture to see the game here.</div></div>
+        <div class="ov-timer" id="ovTimer" hidden><span id="ovTimerIcon">⏳</span> <span id="ovTimerSec">--</span>s</div>
         <div class="ov" id="ov" hidden></div>
       </div>
     </section>
