@@ -444,6 +444,8 @@
     }
     const r = await post('/api/autoclick/toggle', { enabled: !cur, number: num, amount: amt || null });
     if (!r.ok) acShow(r.error, 'err');
+    else if (!cur) acShow('Auto-click enabled. Placing bet when betting opens…', 'pos');
+    else acShow('Auto-click disabled.', 'muted');
   };
   $('acClickNow').onclick = async () => {
     const num = $('acNumber').value, amt = Number($('acAmount').value.trim());

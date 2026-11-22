@@ -216,12 +216,19 @@ function createMonitor({
           : 'Capture restarted: rounds played while it was off are missing, so the first new result is marked as a gap.';
         else if (/gap|restarted/.test(capture.note || '')) patch.note = 'Reading results live.';
         if (settings && settings.autoClick) {
-          setTimeout(() => checkAndTriggerAutoClick(patch.round || snap.round || capture.round), 800);
+          setTimeout(() => checkAndTriggerAutoClick(patch.round || snap.round || capture.round), 1000);
         }
       }
     }
-    if (settings && settings.autoClick && snap.round && snap.round !== capture.round) {
-      checkAndTriggerAutoClick(snap.round);
+    if (settings && settings.autoClick) {
+      if (snap.round && snap.round !== capture.round) {
+        checkAndTriggerAutoClick(snap.round);
+      } else if (tableOdds && (tableOdds.back || (snap.odds && snap.odds.back))) {
+        const roundKey = String(capture.round || (rounds.length + 1));
+        if (lastAutoClickRound !== roundKey && Date.now() - lastAutoClickAt >= 2500 && !autoClicking) {
+          checkAndTriggerAutoClick(roundKey);
+        }
+      }
     }
     setCapture(patch);
   }
@@ -363,7 +370,7 @@ function createMonitor({
       }
     }
 
-    const roundKey = String(triggerRound || (rounds.length + 1));
+    const roundKey = String(triggerRound || capture.round || (rounds.length + 1));
     if (lastAutoClickRound === roundKey) return;
 
     const pick = chooseClick(settings.autoClickNumber, settings.autoClickAmount);
@@ -405,11 +412,11 @@ function createMonitor({
       };
       if (res.ok) {
         setCapture({ note: `Auto-clicked Player ${num} with amount ₹${amt} for round ${roundKey}.` });
-      } else if (res.closed && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 12) {
+      } else if (res.closed && (autoClickTries[roundKey] = (autoClickTries[roundKey] || 0) + 1) < 15) {
         // The round changed before betting opened (odds still locked): try this round again shortly.
-        lastAutoClickAction.error = `Waiting for betting to open (try ${autoClickTries[roundKey]} of 12): ${res.error}`;
+        lastAutoClickAction.error = `Waiting for betting to open (try ${autoClickTries[roundKey]} of 15): ${res.error}`;
         lastAutoClickRound = null; lastAutoClickAt = 0;
-        setTimeout(() => { if (lastAutoClickRound === null) checkAndTriggerAutoClick(roundKey); }, 2000);
+        setTimeout(() => { if (lastAutoClickRound === null && settings && settings.autoClick) checkAndTriggerAutoClick(roundKey); }, 1500);
       }
     } catch (e) {
       lastAutoClickAction = {
@@ -615,6 +622,9 @@ function createMonitor({
         settings = r.settings; store.saveSettings(settings);
         if (session && session.active) { session.alarm = null; checkLimits(); saveSession(); }
         broadcast();
+        if (settings.autoClick && settings.autoClickAmount > 0) {
+          setTimeout(() => checkAndTriggerAutoClick(), 100);
+        }
         return json(200, {ok: true});
       }
       if (pathname === '/api/practice/start') {
@@ -664,7 +674,7 @@ function createMonitor({
         broadcast();
         return json(res.ok ? 200 : 400, res);
       }
-      if (pathname === '/api/autoclick/toggle') {
+      if (pathname === '/api/autoclick' || pathname === '/api/autoclick/toggle') {
         if (!settings) settings = store.loadSettings() || {};
         if (body.enabled !== undefined) settings.autoClick = !!body.enabled;
         if (body.number !== undefined) settings.autoClickNumber = String(body.number);
@@ -672,6 +682,9 @@ function createMonitor({
         if (settings.autoClick && !(settings.autoClickAmount > 0)) { settings.autoClick = false; return json(400, {ok: false, error: 'Enter the amount to bet (₹) before turning auto-click on.'}); }
         store.saveSettings(settings);
         broadcast();
+        if (settings.autoClick) {
+          setTimeout(() => checkAndTriggerAutoClick(), 100);
+        }
         return json(200, {ok: true, settings});
       }
     }
