@@ -5,7 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const {spawn} = require('child_process');
+const { spawn } = require('child_process');
 const V32 = require('./lib/game');
 const Clicker = require('./lib/clicker');
 
@@ -14,9 +14,9 @@ const Clicker = require('./lib/clicker');
 function exactOdds() {
   const e = V32.exact(), odd = {};
   for (const p of V32.PLAYERS) odd[p] = 0.5;
-  return {win: e.win, odd, rounds: e.deals, deals: e.deals, exact: true};
+  return { win: e.win, odd, rounds: e.deals, deals: e.deals, exact: true };
 }
-const {createStore} = require('./lib/store');
+const { createStore } = require('./lib/store');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CAPTURE_SCRIPT = path.join(__dirname, 'lib', 'capture.js');
@@ -51,7 +51,7 @@ function createMonitor({
   let practice = store.loadPractice();
   let tableOdds = store.loadTableOdds(); // The latest odds read from the table: {back, lay, odd, even, at}. // Practice autoplay: pretend bets scored on real results.
   let url = store.loadUrl();
-  let capture = {status: 'stopped', note: 'Enter the game address and click Start capture.', lastSnapshotAt: 0, lastRoundAt: 0, round: null, balance: null, side: null};
+  let capture = { status: 'stopped', note: 'Enter the game address and click Start capture.', lastSnapshotAt: 0, lastRoundAt: 0, round: null, balance: null, side: null };
   let lastStrip = null; // The "Last Result" row as last read, in page order.
   let resumeGap = false; // The next new result follows a break in capture.
   let context = null, stopping = false, gamePage = null, gameFrame = null;
@@ -64,7 +64,7 @@ function createMonitor({
     const values = rounds.slice(-MAX_SENT_ROUNDS);
     return {
       settings, configured: !!settings, url, capture, odds,
-      session: session && {...session, status: V32.sessionStatus(settings || {}, session)},
+      session: session && { ...session, status: V32.sessionStatus(settings || {}, session) },
       sessionRounds: session && session.active ? rounds.filter(r => r.t >= session.startedAt).length : 0,
       total: rounds.length,
       liveValues: capture.startedAt ? rounds.filter(r => r.t >= capture.startedAt).map(r => r.n) : [],
@@ -90,7 +90,7 @@ function createMonitor({
       for (const res of clients) res.write(msg);
     }, 100);
   }
-  const setCapture = patch => { capture = {...capture, ...patch}; broadcast(); };
+  const setCapture = patch => { capture = { ...capture, ...patch }; broadcast(); };
 
   // ---------------------------------------------------------------- session and limits
   function saveSession() { store.saveSession(session); }
@@ -98,63 +98,65 @@ function createMonitor({
     if (!session || !session.active || !settings) return;
     const st = V32.sessionStatus(settings, session);
     if (st && st.reached && (!session.alarm || session.alarm.kind !== st.reached)) {
-      session.alarm = {kind: st.reached, at: Date.now(), acknowledged: false, net: st.net, minutes: st.minutes};
+      session.alarm = { kind: st.reached, at: Date.now(), acknowledged: false, net: st.net, minutes: st.minutes };
       saveSession();
     }
   }
   const limitTimer = setInterval(() => { if (session && session.active) { checkLimits(); broadcast(); } }, 5000);
 
   function startSession(body = {}) {
-    if (!settings) return {ok: false, error: 'Set your budget and stop-loss first (⚙ Settings).'};
-    if (session && session.active) return {ok: false, error: 'A session is already running.'};
+    if (!settings) return { ok: false, error: 'Set your budget and stop-loss first (⚙ Settings).' };
+    if (session && session.active) return { ok: false, error: 'A session is already running.' };
     const typed = body.startBalance === '' || body.startBalance == null ? null : Number(body.startBalance);
-    if (typed != null && !(Number.isFinite(typed) && typed >= 0)) return {ok: false, error: 'Enter your balance as a number.'};
+    if (typed != null && !(Number.isFinite(typed) && typed >= 0)) return { ok: false, error: 'Enter your balance as a number.' };
     const startBalance = typed != null ? typed : capture.balance;
-    if (startBalance == null) return {ok: false, error: 'Your balance could not be read from the game yet. Type it in to start.'};
+    if (startBalance == null) return { ok: false, error: 'Your balance could not be read from the game yet. Type it in to start.' };
     const t0 = Date.now();
-    session = {active: true, startedAt: t0, startBalance, balance: startBalance, balanceFrom: typed != null ? 'typed' : 'game', alarm: null, settings: {...settings}, balances: [{t: t0, b: startBalance}]};
+    session = { active: true, startedAt: t0, startBalance, balance: startBalance, balanceFrom: typed != null ? 'typed' : 'game', alarm: null, settings: { ...settings }, balances: [{ t: t0, b: startBalance }] };
     saveSession(); broadcast();
-    return {ok: true};
+    return { ok: true };
   }
   function setBalance(value, from) {
     if (!session || !session.active || !Number.isFinite(value)) return;
     if (session.balance === value) return;
     session.balance = value; session.balanceFrom = from;
     // Every change, for the win/loss charts (the newest 5,000).
-    (session.balances = session.balances || []).push({t: Date.now(), b: value});
+    (session.balances = session.balances || []).push({ t: Date.now(), b: value });
     if (session.balances.length > 5000) session.balances.splice(0, session.balances.length - 5000);
     checkLimits(); saveSession(); broadcast();
   }
   function endSession(reason = 'ended') {
-    if (!session || !session.active) return {ok: false, error: 'No session is running.'};
+    if (!session || !session.active) return { ok: false, error: 'No session is running.' };
     const st = V32.sessionStatus(settings || {}, session);
-    const {balances, ...rest} = session;
-    const done = {...rest, active: false, endedAt: Date.now(), reason, net: st ? st.net : null,
-      rounds: rounds.filter(r => r.t >= session.startedAt).length};
+    const { balances, ...rest } = session;
+    const done = {
+      ...rest, active: false, endedAt: Date.now(), reason, net: st ? st.net : null,
+      rounds: rounds.filter(r => r.t >= session.startedAt).length
+    };
     store.addFinishedSession(done);
     session = null;
     // Practice autoplay runs with the session: ending the session stops it.
-    if (practice && practice.active) { practice = {...practice, active: false, stopped: 'session', stoppedAt: Date.now()}; store.savePractice(practice); }
+    if (practice && practice.active) { practice = { ...practice, active: false, stopped: 'session', stoppedAt: Date.now() }; store.savePractice(practice); }
     store.saveSession(null);
     broadcast();
-    return {ok: true};
+    return { ok: true };
   }
 
   // ---------------------------------------------------------------- snapshots from the game
   function onSnapshot(snap) {
     if (!snap || typeof snap !== 'object') return;
     const now = Date.now();
-    const patch = {lastSnapshotAt: now};
+    const patch = { lastSnapshotAt: now };
     if (snap.round) patch.round = String(snap.round).slice(0, 40);
     const o = snap.odds;
     const okTable = t => t && V32.PLAYERS.every(p => Number(t[p]) > 1 && Number(t[p]) < 1000);
     if (o && (okTable(o.back) || okTable(o.odd))) {
       const pick = t => (okTable(t) ? Object.fromEntries(V32.PLAYERS.map(p => [p, Number(t[p])])) : null);
-      const next = {back: pick(o.back), lay: pick(o.lay), odd: pick(o.odd), even: pick(o.even)};
+      const next = { back: pick(o.back), lay: pick(o.lay), odd: pick(o.odd), even: pick(o.even) };
       const prev = tableOdds || {};
       for (const k of Object.keys(next)) if (!next[k] && prev[k]) next[k] = prev[k]; // keep a table that's locked now
-      const changed = JSON.stringify({...next, at: 0}) !== JSON.stringify({back: prev.back, lay: prev.lay, odd: prev.odd, even: prev.even, at: 0});
-      tableOdds = {...next, at: now};
+      const changed = JSON.stringify({ ...next, at: 0 }) !== JSON.stringify({ back: prev.back, lay: prev.lay, odd: prev.odd, even: prev.even, at: 0 });
+      tableOdds = { ...next, at: now };
       if (changed) store.saveTableOdds(tableOdds);
     }
     const onTable = Array.isArray(snap.results) && snap.results.filter(v => V32.isPlayer(Number(v))).length >= 5;
@@ -182,7 +184,7 @@ function createMonitor({
         // First reading after (re)starting capture: line the row up with the saved rounds, so
         // rounds that finished while the monitor was off are added, or the break is marked.
         r = V32.resumeResults(rounds.slice(-30).map(x => x.n), strip, side === 'auto' ? capture.side || 'auto' : side, fallback);
-        if (r.gap) { resumeGap = true; r = {added: [], gap: false, side: null}; }
+        if (r.gap) { resumeGap = true; r = { added: [], gap: false, side: null }; }
       } else {
         r = V32.newResults(lastStrip, strip, side, fallback);
       }
@@ -196,12 +198,12 @@ function createMonitor({
         // header changed (for example right after a reconnect), so this result's ID isn't known.
         let label = resuming ? null : (patch.round || capture.round);
         if (label && rounds.length && rounds[rounds.length - 1].round === label) label = null;
-        const rows = r.added.map((n, i) => ({n, t: now, round: i === r.added.length - 1 ? label : null, ...(gapFirst && i === 0 ? {gap: true} : {})}));
+        const rows = r.added.map((n, i) => ({ n, t: now, round: i === r.added.length - 1 ? label : null, ...(gapFirst && i === 0 ? { gap: true } : {}) }));
         // Practice autoplay settles its pretend bet on each new result, in order.
         if (practice && practice.active) {
           let hist = rounds.map(x => x.n);
           for (const row of rows) {
-            practice = V32.practiceStep(practice, hist, row.n, {gap: !!row.gap, round: row.round, now, odds: tableOdds && tableOdds.back});
+            practice = V32.practiceStep(practice, hist, row.n, { gap: !!row.gap, round: row.round, now, odds: tableOdds && tableOdds.back });
             hist = hist.concat(row.n);
             if (!practice.active) break;
           }
@@ -246,7 +248,7 @@ function createMonitor({
   const grabTimer = setInterval(async () => {
     if (!viewers.size || !castPage || grabbing || Date.now() - lastFrameAt < 1000) return;
     grabbing = true;
-    try { pushFrame(await castPage.screenshot({type: 'jpeg', quality: 50, scale: 'css', timeout: 1500})); } catch {}
+    try { pushFrame(await castPage.screenshot({ type: 'jpeg', quality: 50, scale: 'css', timeout: 1500 })); } catch { }
     finally { grabbing = false; }
   }, 600);
 
@@ -256,7 +258,7 @@ function createMonitor({
     if (capture.status !== 'live') return;
     const since = Math.max(capture.lastRoundAt || 0, capture.liveAt || 0);
     if (since && Date.now() - since > staleMs) {
-      setCapture({status: 'stale', staleAt: Date.now(), note: `No new round for ${Math.round((Date.now() - since) / 60000)} min. The game may have logged you out or left the table: check the game window (Show game window).`});
+      setCapture({ status: 'stale', staleAt: Date.now(), note: `No new round for ${Math.round((Date.now() - since) / 60000)} min. The game may have logged you out or left the table: check the game window (Show game window).` });
     }
   }, Math.min(5000, staleMs));
 
@@ -266,7 +268,7 @@ function createMonitor({
   const awakeTimer = setInterval(async () => {
     const page = gamePage || castPage;
     if (!page || !context) return;
-    try { nudge ^= 1; await page.mouse.move(2 + nudge, 2 + nudge); } catch {}
+    try { nudge ^= 1; await page.mouse.move(2 + nudge, 2 + nudge); } catch { }
   }, 40000);
 
   let ownPageWarnedAt = 0, zeroSince = 0;
@@ -292,14 +294,14 @@ function createMonitor({
       let tile = page.locator(TILE).first();
       if (!(await tile.count())) {
         const search = page.locator('input[placeholder="Search game"]').first();
-        await search.fill('32', {timeout: 5000});
-        await tile.waitFor({state: 'attached', timeout: 8000});
+        await search.fill('32', { timeout: 5000 });
+        await tile.waitFor({ state: 'attached', timeout: 8000 });
       }
-      await tile.scrollIntoViewIfNeeded({timeout: 5000});
-      await tile.click({timeout: 5000});
-      setCapture({note: 'Opened VR 32 Cards (MAC88) from the Virtual Games list automatically.'});
+      await tile.scrollIntoViewIfNeeded({ timeout: 5000 });
+      await tile.click({ timeout: 5000 });
+      setCapture({ note: 'Opened VR 32 Cards (MAC88) from the Virtual Games list automatically.' });
     } catch {
-      setCapture({note: "Couldn't open VR 32 Cards automatically. Click it in the game window (Virtual Game → search 32 → VR 32 Cards, MAC88)."});
+      setCapture({ note: "Couldn't open VR 32 Cards automatically. Click it in the game window (Virtual Game → search 32 → VR 32 Cards, MAC88)." });
     }
   }
   function watchForGamesList(page) {
@@ -309,21 +311,21 @@ function createMonitor({
   async function reconnect(frame) {
     const now = Date.now();
     if (settings && settings.autoReconnect === false) {
-      setCapture({note: 'The game disconnected you for inactivity. Click Reconnect in the game window (auto-reconnect is off in Settings).'});
+      setCapture({ note: 'The game disconnected you for inactivity. Click Reconnect in the game window (auto-reconnect is off in Settings).' });
       return;
     }
     reconnects = reconnects.filter(t => now - t < 3600000);
     if (reconnecting || now - reconnectAt < 15000) return;
-    if (reconnects.length >= 20) { setCapture({note: 'The game keeps disconnecting; auto-reconnect paused for this hour. Click Reconnect in the game window.'}); return; }
+    if (reconnects.length >= 20) { setCapture({ note: 'The game keeps disconnecting; auto-reconnect paused for this hour. Click Reconnect in the game window.' }); return; }
     reconnecting = true;
     try {
-      const btn = frame.getByText('Reconnect', {exact: true}).first();
-      await btn.click({timeout: 5000});
+      const btn = frame.getByText('Reconnect', { exact: true }).first();
+      await btn.click({ timeout: 5000 });
       reconnectAt = now; // a successful click waits 15 s before the next; a failed one retries
       reconnects.push(now);
-      setCapture({reconnects: (capture.reconnects || 0) + 1, lastReconnectAt: now, note: `The game disconnected for inactivity; reconnected automatically at ${new Date(now).toLocaleTimeString()}.`});
+      setCapture({ reconnects: (capture.reconnects || 0) + 1, lastReconnectAt: now, note: `The game disconnected for inactivity; reconnected automatically at ${new Date(now).toLocaleTimeString()}.` });
     } catch (e) {
-      setCapture({note: 'The game disconnected for inactivity and the Reconnect button could not be clicked yet; retrying. You can also click it in the game window.'});
+      setCapture({ note: 'The game disconnected for inactivity and the Reconnect button could not be clicked yet; retrying. You can also click it in the game window.' });
     } finally { reconnecting = false; }
   }
 
@@ -340,14 +342,14 @@ function createMonitor({
   // the rounds captured from your game. Nothing is filled in with a default.
   function chooseClick(number, amount) {
     const amt = Number(amount);
-    if (!(amt > 0)) return {error: 'enter the amount to bet (₹).'};
+    if (!(amt > 0)) return { error: 'enter the amount to bet (₹).' };
     let num = Number(number);
     if (!number || number === 'auto') {
-      if (!rounds.length) return {error: 'no rounds captured yet, so there is no prediction pick. Choose a player.'};
+      if (!rounds.length) return { error: 'no rounds captured yet, so there is no prediction pick. Choose a player.' };
       num = V32.autoChoose(rounds.map(x => x.n)).pick;
     }
-    if (![8, 9, 10, 11].includes(num)) return {error: 'choose Player 8, 9, 10 or 11.'};
-    return {number: num, amount: amt};
+    if (![8, 9, 10, 11].includes(num)) return { error: 'choose Player 8, 9, 10 or 11.' };
+    return { number: num, amount: amt };
   }
 
   async function checkAndTriggerAutoClick(triggerRound) {
@@ -403,7 +405,7 @@ function createMonitor({
       return;
     }
 
-    if (!(roundKey in autoClickTries)) autoClickTries = {[roundKey]: 0};
+    if (!(roundKey in autoClickTries)) autoClickTries = { [roundKey]: 0 };
     lastAutoClickRound = roundKey;
     lastAutoClickAt = now;
     autoClicking = true;
@@ -453,23 +455,23 @@ function createMonitor({
   async function keepFocused(page) {
     try {
       const s = await page.context().newCDPSession(page);
-      await s.send('Emulation.setFocusEmulationEnabled', {enabled: true});
-    } catch {}
+      await s.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    } catch { }
   }
   async function watchPage(page) {
     if (castPage === page || !context) return;
     const old = castSession;
     castPage = page; castSession = null;
-    if (old) old.detach().catch(() => {});
+    if (old) old.detach().catch(() => { });
     try {
       const s = await page.context().newCDPSession(page);
-      s.on('Page.screencastFrame', ({data, sessionId}) => {
-        s.send('Page.screencastFrameAck', {sessionId}).catch(() => {});
+      s.on('Page.screencastFrame', ({ data, sessionId }) => {
+        s.send('Page.screencastFrameAck', { sessionId }).catch(() => { });
         if (castSession === s) pushFrame(Buffer.from(data, 'base64'));
       });
       castSession = s;
-      await s.send('Page.startScreencast', {format: 'jpeg', quality: 50, maxWidth: 960, maxHeight: 540, everyNthFrame: 2});
-    } catch {}
+      await s.send('Page.startScreencast', { format: 'jpeg', quality: 55, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1 });
+    } catch { }
     page.on('close', () => {
       if (castPage !== page || !context) return;
       castPage = null;
@@ -481,11 +483,11 @@ function createMonitor({
   // ---------------------------------------------------------------- the game window
   async function openBrowser() {
     if (launch) return launch();
-    const {chromium} = require('playwright-core');
-    const options = {headless, viewport: null, args: ['--no-first-run', '--no-default-browser-check', ...KEEP_RUNNING_ARGS]};
+    const { chromium } = require('playwright-core');
+    const options = { headless, viewport: null, args: ['--no-first-run', '--no-default-browser-check', ...KEEP_RUNNING_ARGS] };
     const errors = [];
     for (const channel of ['chrome', 'msedge', undefined]) {
-      try { return await chromium.launchPersistentContext(profileDir, {...options, channel}); }
+      try { return await chromium.launchPersistentContext(profileDir, { ...options, channel }); }
       catch (e) { errors.push(String(e.message || e).split('\n')[0]); }
     }
     throw new Error(`Could not open Google Chrome or Microsoft Edge. Install Google Chrome and try again. (${errors[0]})`);
@@ -493,29 +495,29 @@ function createMonitor({
 
   async function start(rawUrl) {
     let u;
-    try { u = new URL(String(rawUrl || '').trim()); } catch {}
-    if (!u || !['http:', 'https:'].includes(u.protocol)) return {ok: false, error: 'Enter the full game address, starting with https://'};
+    try { u = new URL(String(rawUrl || '').trim()); } catch { }
+    if (!u || !['http:', 'https:'].includes(u.protocol)) return { ok: false, error: 'Enter the full game address, starting with https://' };
     if (context) await stop('');
     url = u.href; store.saveUrl(url);
     lastStrip = null;
-    setCapture({status: 'starting', note: 'Opening the game window…', url, lastSnapshotAt: 0, startedAt: Date.now(), firstBalance: null});
+    setCapture({ status: 'starting', note: 'Opening the game window…', url, lastSnapshotAt: 0, startedAt: Date.now(), firstBalance: null });
     try { context = await openBrowser(); }
-    catch (e) { context = null; setCapture({status: 'error', note: e.message}); return {ok: false, error: e.message}; }
+    catch (e) { context = null; setCapture({ status: 'error', note: e.message }); return { ok: false, error: e.message }; }
     const ctx = context;
     ctx.on('close', () => {
       if (context === ctx) context = null;
       castPage = null; frame = null;
-      if (!stopping) setCapture({status: 'stopped', note: 'The game window was closed. Click Start capture to open it again.'});
+      if (!stopping) setCapture({ status: 'stopped', note: 'The game window was closed. Click Start capture to open it again.' });
     });
     await ctx.exposeBinding('__v32Report', (src, snap) => {
       // Never read the monitor's own pages (the dashboard shows results, balances and tables that
       // would look like a game). Only the game is read.
       let frameUrl = '';
-      try { frameUrl = src.frame ? src.frame.url() : src.page.url(); } catch {}
+      try { frameUrl = src.frame ? src.frame.url() : src.page.url(); } catch { }
       if (isOwnPage(frameUrl)) {
         if (Date.now() - ownPageWarnedAt > 10000) {
           ownPageWarnedAt = Date.now();
-          setCapture({note: 'The game window is showing this monitor, not the game. Open V-32 Cards in that window (Virtual Game → V-32 Cards); this dashboard is not read.'});
+          setCapture({ note: 'The game window is showing this monitor, not the game. Open V-32 Cards in that window (Virtual Game → V-32 Cards); this dashboard is not read.' });
         }
         return;
       }
@@ -524,47 +526,47 @@ function createMonitor({
         watchPage(gamePage);
         // The table's address is shown but not saved: on Broplay, opening it directly sends you
         // to the logged-out home page, so the start address stays the one you entered.
-        try { setCapture({gameUrl: gamePage.url()}); } catch {}
+        try { setCapture({ gameUrl: gamePage.url() }); } catch { }
       }
       if (snap && snap.disconnected && src.frame) reconnect(src.frame);
       if (src.frame) gameFrame = src.frame;
       onSnapshot(snap);
     });
-    await ctx.addInitScript({path: STAY_VISIBLE_SCRIPT});
-    await ctx.addInitScript({path: CAPTURE_SCRIPT});
+    await ctx.addInitScript({ path: STAY_VISIBLE_SCRIPT });
+    await ctx.addInitScript({ path: CAPTURE_SCRIPT });
     const page = ctx.pages()[0] || await ctx.newPage();
     keepFocused(page); watchPage(page); watchForGamesList(page);
     ctx.on('page', p => { keepFocused(p); watchForGamesList(p); if (!gamePage) watchPage(p); });
-    setCapture({status: 'waiting', note: 'Game window open. Log in if asked and open V-32 Cards; results appear here as rounds finish.'});
-    page.goto(url, {waitUntil: 'domcontentloaded', timeout: 60000}).catch(e => {
-      if (context === ctx && capture.status === 'waiting') setCapture({note: `The page did not load (${String(e.message).split('\n')[0]}). Check the address, or load it in the game window.`});
+    setCapture({ status: 'waiting', note: 'Game window open. Log in if asked and open V-32 Cards; results appear here as rounds finish.' });
+    page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(e => {
+      if (context === ctx && capture.status === 'waiting') setCapture({ note: `The page did not load (${String(e.message).split('\n')[0]}). Check the address, or load it in the game window.` });
     });
-    return {ok: true};
+    return { ok: true };
   }
 
   // Brings the monitor's own game window to the front, so it is easy to tell apart from other browsers.
   async function showWindow() {
     const page = gamePage || castPage || (context && context.pages().at(-1));
-    if (!page) return {ok: false, error: 'The game window is not open. Click Start capture first.'};
-    try { await page.bringToFront(); } catch {}
-    return {ok: true, pages: context ? context.pages().map(p => p.url()) : []};
+    if (!page) return { ok: false, error: 'The game window is not open. Click Start capture first.' };
+    try { await page.bringToFront(); } catch { }
+    return { ok: true, pages: context ? context.pages().map(p => p.url()) : [] };
   }
 
   async function stop(note = 'Capture stopped.') {
     const ctx = context;
     context = null; castPage = null; castSession = null; gamePage = null; gameFrame = null; frame = null; lastStrip = null;
     stopping = true;
-    try { if (ctx) await ctx.close(); } catch {} finally { stopping = false; }
-    setCapture({status: 'stopped', note});
-    return {ok: true};
+    try { if (ctx) await ctx.close(); } catch { } finally { stopping = false; }
+    setCapture({ status: 'stopped', note });
+    return { ok: true };
   }
 
   // ---------------------------------------------------------------- HTTP
   function readJson(req) {
     return new Promise((resolve, reject) => {
       let body = '';
-      req.on('data', c => { body += c; if (body.length > 1e5) { reject(Object.assign(new Error('Too large'), {statusCode: 413})); req.destroy(); } });
-      req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { reject(Object.assign(new Error('Bad JSON'), {statusCode: 400})); } });
+      req.on('data', c => { body += c; if (body.length > 1e5) { reject(Object.assign(new Error('Too large'), { statusCode: 413 })); req.destroy(); } });
+      req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { reject(Object.assign(new Error('Bad JSON'), { statusCode: 400 })); } });
     });
   }
   function csv() {
@@ -580,40 +582,40 @@ function createMonitor({
     const allowed = [`localhost:${boundPort}`, `127.0.0.1:${boundPort}`];
     if (!allowed.includes(host)) { res.writeHead(403).end('forbidden'); return; }
     if (req.method === 'POST' && req.headers.origin && !allowed.map(h => `http://${h}`).includes(req.headers.origin)) { res.writeHead(403).end('forbidden'); return; }
-    const {pathname} = new URL(req.url, `http://${host}`);
-    const json = (code, body) => res.writeHead(code, {'Content-Type': 'application/json', 'Cache-Control': 'no-store'}).end(JSON.stringify(body));
+    const { pathname } = new URL(req.url, `http://${host}`);
+    const json = (code, body) => res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
 
     if (req.method === 'GET') {
       if (demo && pathname === '/demo') {
-        res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'});
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         return fs.createReadStream(path.join(PUBLIC_DIR, 'demo.html')).pipe(res);
       }
       if (STATIC[pathname]) {
         const [file, type] = STATIC[pathname];
-        res.writeHead(200, {'Content-Type': type, 'Cache-Control': 'no-store'});
+        res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
         return fs.createReadStream(path.join(PUBLIC_DIR, file)).pipe(res);
       }
       if (pathname === '/models.js') {
-        res.writeHead(200, {'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store'});
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
         return fs.createReadStream(path.join(__dirname, 'lib', 'models.js')).pipe(res);
       }
       if (pathname === '/game.js') {
-        res.writeHead(200, {'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store'});
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
         return fs.createReadStream(path.join(__dirname, 'lib', 'game.js')).pipe(res);
       }
       if (pathname === '/api/state') return json(200, state());
       if (pathname === '/api/rounds.csv') {
-        return res.writeHead(200, {'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="v32-rounds.csv"'}).end(csv());
+        return res.writeHead(200, { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="v32-rounds.csv"' }).end(csv());
       }
       if (pathname === '/events') {
-        res.writeHead(200, {'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive'});
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
         res.write(`data: ${JSON.stringify(state())}\n\n`);
         clients.add(res);
         req.on('close', () => clients.delete(res));
         return;
       }
       if (pathname === '/preview') {
-        res.writeHead(200, {'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-store', Connection: 'keep-alive'});
+        res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
         viewers.add(res);
         if (frame) writeFrame(res, frame);
         req.on('close', () => viewers.delete(res));
@@ -634,28 +636,28 @@ function createMonitor({
         if (settings.autoClick && settings.autoClickAmount > 0) {
           setTimeout(() => checkAndTriggerAutoClick(), 100);
         }
-        return json(200, {ok: true});
+        return json(200, { ok: true });
       }
       if (pathname === '/api/practice/start') {
         const c = V32.checkPractice(body);
         if (!c.ok) return json(400, c);
-        if (!tableOdds || !tableOdds.back) return json(400, {ok: false, error: "The table's odds haven't been read yet. Open V-32 Cards and wait until betting opens (the odds show instead of locks)."});
+        if (!tableOdds || !tableOdds.back) return json(400, { ok: false, error: "The table's odds haven't been read yet. Open V-32 Cards and wait until betting opens (the odds show instead of locks)." });
         practice = V32.newPractice(c.practice, rounds.map(x => x.n), Date.now(), tableOdds.back);
         store.savePractice(practice); broadcast();
-        return json(200, {ok: true});
+        return json(200, { ok: true });
       }
       if (pathname === '/api/practice/stop') {
-        if (practice && practice.active) { practice = {...practice, active: false, stopped: 'you', stoppedAt: Date.now()}; store.savePractice(practice); broadcast(); }
-        return json(200, {ok: true});
+        if (practice && practice.active) { practice = { ...practice, active: false, stopped: 'you', stoppedAt: Date.now() }; store.savePractice(practice); broadcast(); }
+        return json(200, { ok: true });
       }
       if (pathname === '/api/session/start') { const r = startSession(body); return json(r.ok ? 200 : 400, r); }
       if (pathname === '/api/session/end') { const r = endSession(body.reason || 'ended'); return json(r.ok ? 200 : 400, r); }
       if (pathname === '/api/session/balance') {
         const v = Number(body.balance);
-        if (!(Number.isFinite(v) && v >= 0)) return json(400, {ok: false, error: 'Enter your balance as a number.'});
-        if (!session || !session.active) return json(400, {ok: false, error: 'No session is running.'});
+        if (!(Number.isFinite(v) && v >= 0)) return json(400, { ok: false, error: 'Enter your balance as a number.' });
+        if (!session || !session.active) return json(400, { ok: false, error: 'No session is running.' });
         setBalance(v, 'typed');
-        return json(200, {ok: true});
+        return json(200, { ok: true });
       }
       if (pathname === '/api/alarm/ack') {
         if (session && session.alarm) {
@@ -664,11 +666,11 @@ function createMonitor({
           if (body.endSession) endSession(`limit: ${session.alarm.kind}`);
           broadcast();
         }
-        return json(200, {ok: true});
+        return json(200, { ok: true });
       }
       if (pathname === '/api/click') {
         const pick = chooseClick(body.number, body.amount);
-        if (pick.error) return json(400, {ok: false, error: pick.error[0].toUpperCase() + pick.error.slice(1)});
+        if (pick.error) return json(400, { ok: false, error: pick.error[0].toUpperCase() + pick.error.slice(1) });
         const num = pick.number, amt = pick.amount;
         const res = await clickGameNumberAndAmount(num, amt);
         lastAutoClickAction = {
@@ -688,22 +690,22 @@ function createMonitor({
         if (body.enabled !== undefined) settings.autoClick = !!body.enabled;
         if (body.number !== undefined) settings.autoClickNumber = String(body.number);
         if (body.amount !== undefined) settings.autoClickAmount = Number(body.amount) > 0 ? Number(body.amount) : null;
-        if (settings.autoClick && !(settings.autoClickAmount > 0)) { settings.autoClick = false; return json(400, {ok: false, error: 'Enter the amount to bet (₹) before turning auto-click on.'}); }
+        if (settings.autoClick && !(settings.autoClickAmount > 0)) { settings.autoClick = false; return json(400, { ok: false, error: 'Enter the amount to bet (₹) before turning auto-click on.' }); }
         store.saveSettings(settings);
         broadcast();
         if (settings.autoClick) {
           setTimeout(() => checkAndTriggerAutoClick(), 100);
         }
-        return json(200, {ok: true, settings});
+        return json(200, { ok: true, settings });
       }
     }
-    return json(404, {ok: false, error: 'Not found'});
+    return json(404, { ok: false, error: 'Not found' });
   }
 
   const server = http.createServer((req, res) => {
     handle(req, res).catch(e => {
       if (res.headersSent) return res.destroy();
-      res.writeHead(e.statusCode || 500, {'Content-Type': 'application/json'}).end(JSON.stringify({ok: false, error: e.statusCode ? e.message : 'Request failed. Check the server log.'}));
+      res.writeHead(e.statusCode || 500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: false, error: e.statusCode ? e.message : 'Request failed. Check the server log.' }));
       if (!e.statusCode) console.error(e);
     });
   });
@@ -726,17 +728,17 @@ function createMonitor({
   };
 }
 
-module.exports = {createMonitor};
+module.exports = { createMonitor };
 
 if (require.main === module) {
   const port = Number(process.env.PORT) || 4330;
-  const monitor = createMonitor({port, headless: process.env.MONITOR_HEADLESS === '1'});
+  const monitor = createMonitor({ port, headless: process.env.MONITOR_HEADLESS === '1' });
   monitor.listen().then(p => {
     const link = `http://localhost:${p}`;
     console.log(`V-32 Live Monitor is running at ${link}  (press Ctrl+C to quit)`);
     if (process.env.MONITOR_NO_OPEN !== '1') {
       const [cmd, args] = process.platform === 'darwin' ? ['open', [link]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', link]] : ['xdg-open', [link]];
-      try { spawn(cmd, args, {stdio: 'ignore', detached: true}).unref(); } catch {}
+      try { spawn(cmd, args, { stdio: 'ignore', detached: true }).unref(); } catch { }
     }
   }).catch(e => {
     console.error(e.code === 'EADDRINUSE' ? `Port ${port} is busy. Is the monitor already running? Open http://localhost:${port}` : e);
