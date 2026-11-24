@@ -258,8 +258,10 @@
     }
     el.hidden = false;
     $('ovTimerSec').textContent = t;
+    $('ovTimerDigits').innerHTML = String(t).padStart(2, '0').split('').map(d => `<i>${d}</i>`).join('');
     el.className = 'ov-timer' + (t <= 5 ? (t === 0 ? ' zero' : ' low') : '');
     $('ovTimerIcon').textContent = t > 0 ? '⏳' : '🔒';
+    $('ovTimerLbl').textContent = t > 0 ? 'BETS CLOSE' : 'CLOSED';
   }
 
   function renderOverlay(force) {

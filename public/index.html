@@ -56,10 +56,19 @@ button:disabled{opacity:.5;cursor:default}
 .meter .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
 .meter.loss .bar i{background:var(--bad)}.meter.target .bar i{background:var(--good)}
 .preview-wrap{position:relative;container-type:inline-size}
-.ov-timer{position:absolute;top:8px;left:8px;background:rgba(10,14,20,.85);color:#5fc28f;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:4px 10px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);display:flex;align-items:center;gap:6px;z-index:2;box-shadow:0 2px 6px rgba(0,0,0,.4);pointer-events:none}
+.ov-timer{position:absolute;bottom:10px;left:10px;background:rgba(10,14,20,.85);color:#5fc28f;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:6px 10px;font-weight:800;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);display:flex;align-items:center;gap:8px;z-index:2;box-shadow:0 4px 12px rgba(0,0,0,.5);pointer-events:none}
 .ov-timer[hidden]{display:none}
-.ov-timer.low{color:#f5c04a;border-color:rgba(245,192,74,.4)}
-.ov-timer.zero{color:#ef7b7a;border-color:rgba(239,123,122,.4)}
+.ov-timer .lbl{display:flex;flex-direction:column;align-items:center;font-size:10px;letter-spacing:.06em;color:#9aa7b4;line-height:1.3}
+.ov-timer .lbl b{font-size:18px}
+.ov-timer .digits{display:flex;gap:4px}
+.ov-timer .digits i{font-style:normal;position:relative;display:block;width:34px;height:46px;line-height:46px;text-align:center;font-size:36px;border-radius:6px;background:#1d3446;color:#fff}
+.ov-timer .digits i::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.55)}
+.ov-timer.low .digits i{background:#7a5a12}
+.ov-timer.low{border-color:rgba(245,192,74,.6);animation:ovPulse 1s ease-in-out infinite}
+.ov-timer.zero .digits i{background:#6b2524}
+.ov-timer.zero{border-color:rgba(239,123,122,.6)}
+@keyframes ovPulse{50%{box-shadow:0 0 0 4px rgba(245,192,74,.35)}}
+@media (prefers-reduced-motion:reduce){.ov-timer.low{animation:none}}
 .ov{position:absolute;top:8px;right:8px;background:rgba(10,14,20,.82);color:#eef2f6;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 8px;font-size:11px;font-variant-numeric:tabular-nums;backdrop-filter:blur(4px);pointer-events:none}
 .ov-btns{float:right;display:inline-flex;gap:4px;margin-left:10px;pointer-events:auto}
 .ov-btns button{all:unset;cursor:pointer;width:18px;height:18px;line-height:18px;text-align:center;border-radius:4px;background:rgba(255,255,255,.12);color:#e7ecf1;font-size:12px}
@@ -251,7 +260,7 @@ label.f small{color:var(--muted)}
         <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" id="ovToggle" checked> Win % overlay</label></div>
       <div class="preview-wrap">
         <div class="preview" id="preview"><div class="empty">Start capture to see the game here.</div></div>
-        <div class="ov-timer" id="ovTimer" hidden><span id="ovTimerIcon">⏳</span> <span id="ovTimerSec">--</span>s</div>
+        <div class="ov-timer" id="ovTimer" hidden><span class="lbl"><b id="ovTimerIcon">⏳</b><span id="ovTimerLbl">BETS CLOSE</span></span><span class="digits" id="ovTimerDigits"><i>-</i><i>-</i></span><span id="ovTimerSec" hidden>--</span></div>
         <div class="ov" id="ov" hidden></div>
       </div>
     </section>

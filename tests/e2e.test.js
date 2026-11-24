@@ -64,7 +64,20 @@ test('end to end with a real browser', async t => {
         timer.textContent = '27';
       });
       await until(() => m.state().capture.timer === 27, 'the unlabeled blue countdown tile to be captured', 5000);
+      // A flip clock: one blue tile per digit ("3" | "0"), each digit drawn twice (top and
+      // bottom halves), in elements named like a clock. It must read as 30, not 3 or 0.
       await demo(() => {
+        document.getElementById('unlabeled-clock').style.display = 'none';
+        const clock = document.createElement('div');
+        clock.id = 'flip'; clock.className = 'flip-clock';
+        clock.style.cssText = 'position:absolute;right:4px;bottom:4px;display:flex;gap:8px;z-index:100';
+        clock.innerHTML = ['3', '0'].map(d => `<div class="flip-clock__digit" style="position:relative;width:40px;height:56px;background:rgb(30,60,90);color:white;font-size:44px">`
+          + `<span class="top" style="position:absolute;inset:0">${d}</span><span class="bottom" style="position:absolute;inset:0">${d}</span></div>`).join('');
+        document.body.appendChild(clock);
+      });
+      await until(() => m.state().capture.timer === 30, 'the two-tile flip clock to be read as 30', 5000);
+      await demo(() => {
+        document.getElementById('flip').remove();
         const timer = document.getElementById('unlabeled-clock');
         timer.id = 'timer'; timer.className = 'timer'; timer.removeAttribute('style');
       });
